@@ -323,7 +323,14 @@ const BIZ_UNITS = [
   { key: "infra", label: "인프라사업부", tag: "", biz: "인프라사업팀" },
   { key: "fa", label: "FA사업팀", tag: "", biz: "FA사업팀" },
   { key: "strategy", label: "전략·대외사업팀", tag: "", biz: "전략/대외사업팀" },
+  { key: "strategybu", label: "전략사업부", tag: "", biz: ["FA사업팀", "전략/대외사업팀"] }, // FA+전략/대외 합산 (GS 시트의 숨은 5번째 블록)
 ];
+
+function bizMatch(biz, filter) {
+  if (!filter) return true;
+  if (Array.isArray(filter)) return filter.includes(biz);
+  return biz === filter;
+}
 
 // GS 시트 블록 내 행 오프셋(수주 행 기준 +n). goodus_dashboard_gs_sheet_formulas 메모리 참고.
 const OFFSETS = {
@@ -337,7 +344,8 @@ function stripSpaces(v) { return (v == null ? "" : String(v)).replace(/\s+/g, ""
 // 절대 행 번호 대신 라벨로 찾는 이유: 시트에 행이 추가/삭제돼도 안전하게 동작하도록.
 function findGSBlockStarts(gsGrid) {
   const idxs = [];
-  for (let i = 0; i < gsGrid.length && idxs.length < 4; i++) {
+  // 5번째 "수주" 행은 GS 시트 자체가 갖고 있는 숨은 롤업 블록(FA사업팀+전략/대외사업팀 합산) — 전략사업부 탭에 사용.
+  for (let i = 0; i < gsGrid.length && idxs.length < 5; i++) {
     if (stripSpaces(gsGrid[i][1]) === "수주") idxs.push(i);
   }
   if (idxs.length < 4) throw new Error("GS 시트 구조를 인식할 수 없습니다 (수주 행 4개를 찾지 못함)");
@@ -425,7 +433,7 @@ function sumBacklogRevenue(wonGrid, dataStart, bizFilter) {
     const r = wonGrid[i];
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
-    if (bizFilter && biz !== bizFilter) continue;
+    if (!bizMatch(biz, bizFilter)) continue;
     for (let c = 17 + M; c <= 28; c++) s += Number(r[c]) || 0; // (마감월+1)월~12월 매출인식
   }
   return s;
@@ -437,7 +445,7 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
     const r = pipeGrid[i];
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
-    if (bizFilter && biz !== bizFilter) continue;
+    if (!bizMatch(biz, bizFilter)) continue;
     if (stripSpaces(r[2]) !== "적용") continue; // C = 수주확도 적용
     s += Number(r[34]) || 0; // AI = 매출 당해합계
   }
@@ -447,8 +455,9 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
 function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
   const blockStarts = findGSBlockStarts(gsGrid);
   const M = CLOSING_MONTH;
-  return BIZ_UNITS.map((meta, i) => {
-    const base = blockStarts[i];
+  return BIZ_UNITS.map((meta, i) => ({ meta, base: blockStarts[i] }))
+    .filter(({ base }) => base !== undefined)
+    .map(({ meta, base }) => {
     const raw = {};
     Object.keys(OFFSETS).forEach(k => { raw[k] = extractGSRow(gsGrid, base, k); });
 
@@ -519,7 +528,7 @@ async function loadLiveData() {
 }
 
 // ---------- 프로젝트 드릴다운 팝업 ----------
-const BIZ_MAP = { all: null, infra: "인프라사업팀", fa: "FA사업팀", strategy: "전략/대외사업팀" };
+const BIZ_MAP = { all: null, infra: "인프라사업팀", fa: "FA사업팀", strategy: "전략/대외사업팀", strategybu: ["FA사업팀", "전략/대외사업팀"] };
 const MONTH_LABEL = { cum: `1~${CLOSING_MONTH}월 누계`, remain: `${CLOSING_MONTH + 1}~12월 잔여` };
 
 function monthTargets(monthKey) {
@@ -548,7 +557,7 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
 
   PROJECTS_WON.forEach(p => {
     const [biz, name, cust, rep, month, amt, ...m] = p;
-    if (bizFilter !== null && biz !== bizFilter) return;
+    if (!bizMatch(biz, bizFilter)) return;
     if (metric === "수주") {
       if (yms.includes(month)) rows.push({ name, cust, rep, amt, month, tag: "확정계약", cls: "won" });
     } else {
@@ -559,7 +568,7 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
 
   PROJECTS_PIPELINE.forEach(p => {
     const [biz, name, cust, rep, month, applied, prob, status, ...m] = p;
-    if (bizFilter !== null && biz !== bizFilter) return;
+    if (!bizMatch(biz, bizFilter)) return;
     if ((parseInt(prob, 10) || 0) < 50) return; // 수주확도(확률) 50% 미만 제외
     if (metric === "수주") {
       if (yms.includes(month)) rows.push({ name, cust, rep, amt: applied, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
