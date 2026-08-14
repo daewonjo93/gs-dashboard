@@ -560,6 +560,7 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
   PROJECTS_PIPELINE.forEach(p => {
     const [biz, name, cust, rep, month, applied, prob, status, ...m] = p;
     if (bizFilter !== null && biz !== bizFilter) return;
+    if ((parseInt(prob, 10) || 0) < 50) return; // 수주확도(확률) 50% 미만 제외
     if (metric === "수주") {
       if (yms.includes(month)) rows.push({ name, cust, rep, amt: applied, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
     } else {
