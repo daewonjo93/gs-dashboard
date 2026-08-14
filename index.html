@@ -297,7 +297,7 @@
 const EOK = "억"; // 단위: 억원
 
 // ---------- 구글시트 실시간 연동 ----------
-const SHEET_ID = "1qmO7XmveAJ0AGiq8M9-Bjk_1bXiUpVlJ";
+const SHEET_ID = "1a9aJUkhUGv4N_iyTF9zsuGdccNU14kDx"; // 2026-08-14: 피벗이 정상 작동하는 새 시트로 교체
 // 마감월(현재 몇 월까지의 누계인지). 다음 달로 갱신할 때 이 값만 바꾸면 됨.
 const CLOSING_MONTH = 7;
 
@@ -371,15 +371,17 @@ function periodize(target, months) {
 
 // 진행(계약)_리스트: 헤더행("계약월")을 찾아 데이터 시작 위치를 얻는다(헤더 다음다음 행부터, 합계행 1개 건너뜀).
 function findWonDataStart(grid) {
+  // "계약월" 헤더 라벨이 시트 버전에 따라 비어있을 수 있어(2026-08-14 확인),
+  // 항상 존재하는 합계행의 "합계"(프로젝트명 열) 위치로 찾는다.
   for (let i = 0; i < grid.length; i++) {
-    if (stripSpaces(grid[i][1]) === "계약월") return i + 2;
+    if (stripSpaces(grid[i][6]) === "합계") return i + 1;
   }
   throw new Error("진행(계약)_리스트 구조를 인식할 수 없습니다 (헤더 행을 찾지 못함)");
 }
 // 사전(펀넬)_리스트: "합계" 라벨이 있는 행 다음부터 데이터 시작.
 function findPipeDataStart(grid) {
   for (let i = 0; i < grid.length; i++) {
-    if (stripSpaces(grid[i][7]) === "합계") return i + 1;
+    if (stripSpaces(grid[i][8]) === "합계") return i + 1;
   }
   throw new Error("사전(펀넬)_리스트 구조를 인식할 수 없습니다 (합계 행을 찾지 못함)");
 }
@@ -398,6 +400,8 @@ function buildWonList(grid, dataStart) {
   return rows;
 }
 // A=사업부명, B=계약월, C=수주확도 적용, H=프로젝트명, K=영업대표, L=매출처명, R=예상수주확률, S=프로젝트상태, V:AG=1~12월
+// 2026-08-14: 새 시트에서 "수주확도 적용" 상태 열이 추가되며 C열 이후 전체가 +1 밀림 —
+// A=사업부명, B=계약월, D=수주확도 적용(금액), I=프로젝트명, L=영업대표, M=매출처명, S=예상수주확률, T=프로젝트상태, W:AH=1~12월 매출인식
 function buildPipelineList(grid, dataStart) {
   const rows = [];
   for (let i = dataStart; i < grid.length; i++) {
@@ -405,93 +409,11 @@ function buildPipelineList(grid, dataStart) {
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
     const months = [];
-    for (let c = 21; c <= 32; c++) months.push(Number(r[c]) || 0);
-    const prob = r[17] != null ? Math.round(Number(r[17]) * 100) + "%" : "";
-    rows.push([biz, r[7], r[11], r[10], String(r[1] || "").trim(), Number(r[2]) || 0, prob, (r[18] || "").toString().trim(), ...months]);
+    for (let c = 22; c <= 33; c++) months.push(Number(r[c]) || 0);
+    const prob = r[18] != null ? Math.round(Number(r[18]) * 100) + "%" : "";
+    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), Number(r[3]) || 0, prob, (r[19] || "").toString().trim(), ...months]);
   }
   return rows;
-}
-
-// 수주는 GS 피벗이 아니라 원장(진행(계약)_리스트 + 사전(펀넬)_리스트, 수주확도 적용 1원 이상)에서 직접 집계.
-// (구글시트 변환 과정에서 확정계약 피벗이 깨져 0으로 나오는 문제 발견, 2026-08-12)
-const REPORT_YEAR = "2026"; // 계약월이 이 연도인 건만 당해 수주로 집계(이월 계약 제외). 연도가 바뀌면 갱신.
-function parseYm(v) {
-  const s = String(v == null ? "" : v).trim();
-  if (s.length !== 6) return null;
-  return { year: s.slice(0, 4), month: parseInt(s.slice(4, 6), 10) };
-}
-// 매출도 GS 피벗(F/G:R)이 원본 대비 절반 가까이 누락되는 것을 원장 대조로 확인(2026-08-13) —
-// 수주와 동일하게 원장에서 직접 집계. 계약월 필터 없이 01~12월 매출인식 컬럼을 그대로 합산.
-function aggregateRevenue(wonRows, pipeRows, bizFilter) {
-  const months = new Array(12).fill(0);
-  wonRows.forEach(r => {
-    if (bizFilter && r[0] !== bizFilter) return;
-    for (let m = 0; m < 12; m++) months[m] += r[6 + m] || 0;
-  });
-  pipeRows.forEach(r => {
-    if (bizFilter && r[0] !== bizFilter) return;
-    if (!r[5] || r[5] < 1) return;
-    for (let m = 0; m < 12; m++) months[m] += r[8 + m] || 0;
-  });
-  return months;
-}
-
-// 재료비도 매출과 동일한 원장 구조에서 직접 집계(2026-08-14, 사용자 확인):
-// 진행(계약)_리스트 AH:AS = 01~12월 매입(재료비) 인식, R:AC(매출)와 완전 대칭 구조.
-// 사전(펀넬)_리스트 AL:AW = 01~12월 매입(재료비) 인식, V:AG(매출)와 대칭. 필터는 매출과 동일(수주확도 적용 1원 이상).
-function buildWonMaterialRows(grid, dataStart) {
-  const rows = [];
-  for (let i = dataStart; i < grid.length; i++) {
-    const r = grid[i];
-    const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
-    if (!biz) continue;
-    const months = [];
-    for (let c = 33; c <= 44; c++) months.push(Number(r[c]) || 0); // AH:AS
-    rows.push([biz, ...months]);
-  }
-  return rows;
-}
-function buildPipelineMaterialRows(grid, dataStart) {
-  const rows = [];
-  for (let i = dataStart; i < grid.length; i++) {
-    const r = grid[i];
-    const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
-    if (!biz) continue;
-    const applied = Number(r[2]) || 0; // C = 수주확도 적용
-    const months = [];
-    for (let c = 37; c <= 48; c++) months.push(Number(r[c]) || 0); // AL:AW
-    rows.push([biz, applied, ...months]);
-  }
-  return rows;
-}
-function aggregateMaterialCost(wonMatRows, pipeMatRows, bizFilter) {
-  const months = new Array(12).fill(0);
-  wonMatRows.forEach(r => {
-    if (bizFilter && r[0] !== bizFilter) return;
-    for (let m = 0; m < 12; m++) months[m] += r[1 + m] || 0;
-  });
-  pipeMatRows.forEach(r => {
-    if (bizFilter && r[0] !== bizFilter) return;
-    if (!r[1] || r[1] < 1) return;
-    for (let m = 0; m < 12; m++) months[m] += r[2 + m] || 0;
-  });
-  return months;
-}
-
-function aggregateOrders(wonRows, pipeRows, bizFilter) {
-  const months = new Array(12).fill(0);
-  wonRows.forEach(r => {
-    if (bizFilter && r[0] !== bizFilter) return;
-    const ym = parseYm(r[4]);
-    if (ym && ym.year === REPORT_YEAR && ym.month >= 1 && ym.month <= 12) months[ym.month - 1] += r[5] || 0;
-  });
-  pipeRows.forEach(r => {
-    if (bizFilter && r[0] !== bizFilter) return;
-    if (!r[5] || r[5] < 1) return;
-    const ym = parseYm(r[4]);
-    if (ym && ym.year === REPORT_YEAR && ym.month >= 1 && ym.month <= 12) months[ym.month - 1] += r[5];
-  });
-  return months;
 }
 
 function sumBacklogRevenue(wonGrid, dataStart, bizFilter) {
@@ -513,12 +435,12 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
     if (bizFilter && biz !== bizFilter) continue;
-    s += Number(r[15]) || 0; // P = 예상수주금액
+    s += Number(r[16]) || 0; // Q = 예상수주금액 (2026-08-14 새 시트에서 +1 밀림)
   }
   return s;
 }
 
-function buildUnitData(gsGrid, wonRows, pipeRows, wonMatRows, pipeMatRows, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
+function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
   const blockStarts = findGSBlockStarts(gsGrid);
   const M = CLOSING_MONTH;
   return BIZ_UNITS.map((meta, i) => {
@@ -526,26 +448,24 @@ function buildUnitData(gsGrid, wonRows, pipeRows, wonMatRows, pipeMatRows, wonGr
     const raw = {};
     Object.keys(OFFSETS).forEach(k => { raw[k] = extractGSRow(gsGrid, base, k); });
 
-    const revenueMonths = aggregateRevenue(wonRows, pipeRows, meta.biz);
-    const 매출 = periodize(raw.매출.target, revenueMonths);
+    // 2026-08-14: 새 구글시트에서 GS의 피벗 체인(수주/매출_매입)이 정상 작동하는 것을 확인 —
+    // 원장 재구성 없이 GS 시트 값을 그대로 신뢰(수주/매출/재료비/영업이익 전부).
+    const 매출 = periodize(raw.매출.target, raw.매출.months);
+    const 수주 = periodize(raw.수주.target, raw.수주.months);
 
-    const orderMonths = aggregateOrders(wonRows, pipeRows, meta.biz);
-    const 수주 = periodize(raw.수주.target, orderMonths);
-
-    const materialMonths = aggregateMaterialCost(wonMatRows, pipeMatRows, meta.biz);
     function pctOf(numArr, denArr, fromIdx, toIdx) {
       const n = sumRange(numArr, fromIdx, toIdx), d = sumRange(denArr, fromIdx, toIdx);
       return d ? +(n / d * 100).toFixed(2) : 0;
     }
     const 재료비율 = {
-      cum: pctOf(materialMonths, revenueMonths, 0, M - 1),
-      annual: pctOf(materialMonths, revenueMonths, 0, 11),
-      target: raw.매출.target ? +(raw.재료비.target / raw.매출.target * 100).toFixed(2) : 0, // E열(경영계획)은 피벗이 아니라 그대로 신뢰
+      cum: pctOf(raw.재료비.months, raw.매출.months, 0, M - 1),
+      annual: pctOf(raw.재료비.months, raw.매출.months, 0, 11),
+      target: raw.매출.target ? +(raw.재료비.target / raw.매출.target * 100).toFixed(2) : 0,
     };
     const monthlyMaterialPct = {
-      jul: revenueMonths[M - 1] ? +(materialMonths[M - 1] / revenueMonths[M - 1] * 100).toFixed(2) : 0,
-      aug: revenueMonths[M] ? +(materialMonths[M] / revenueMonths[M] * 100).toFixed(2) : 0,
-      remain: pctOf(materialMonths, revenueMonths, M + 1, 11),
+      jul: raw.매출.months[M - 1] ? +(raw.재료비.months[M - 1] / raw.매출.months[M - 1] * 100).toFixed(2) : 0,
+      aug: raw.매출.months[M] ? +(raw.재료비.months[M] / raw.매출.months[M] * 100).toFixed(2) : 0,
+      remain: pctOf(raw.재료비.months, raw.매출.months, M + 1, 11),
     };
 
     const OPEXmonths = raw.기술직접원가.months.map((v, idx) =>
@@ -553,9 +473,7 @@ function buildUnitData(gsGrid, wonRows, pipeRows, wonMatRows, pipeMatRows, wonGr
     const OPEXtarget = raw.기술직접원가.target + raw.직접경비.target + raw.영업OPEX.target + raw.기술OPEX간접비용.target;
     const OPEX = periodize(OPEXtarget, OPEXmonths);
 
-    // 영업이익 = 매출 − 재료비 − OPEX − 공통비 (매출/재료비는 원장 라이브, OPEX/공통비는 GS의 별도 피벗 — 깨지지 않음, 기존 스냅샷과 일치 검증됨)
-    const opProfitMonths = revenueMonths.map((v, idx) => v - materialMonths[idx] - OPEXmonths[idx] - raw.공통비.months[idx]);
-    const 영업이익 = periodize(raw.영업이익.target, opProfitMonths);
+    const 영업이익 = periodize(raw.영업이익.target, raw.영업이익.months);
 
     const backlogRevenue = sumBacklogRevenue(wonGrid, wonDataStart, meta.biz);
     const funnelTarget = sumFunnelTarget(pipeGrid, pipeDataStart, meta.biz);
@@ -589,9 +507,7 @@ async function loadLiveData() {
   const pipeDataStart = findPipeDataStart(pipeGrid);
   PROJECTS_WON = buildWonList(wonGrid, wonDataStart);
   PROJECTS_PIPELINE = buildPipelineList(pipeGrid, pipeDataStart);
-  const wonMatRows = buildWonMaterialRows(wonGrid, wonDataStart);
-  const pipeMatRows = buildPipelineMaterialRows(pipeGrid, pipeDataStart);
-  UNITS = buildUnitData(gsGrid, PROJECTS_WON, PROJECTS_PIPELINE, wonMatRows, pipeMatRows, wonGrid, wonDataStart, pipeGrid, pipeDataStart);
+  UNITS = buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart);
 }
 
 // ---------- 프로젝트 드릴다운 팝업 ----------
