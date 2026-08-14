@@ -463,6 +463,7 @@ function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
     }
     const 재료비율 = {
       cum: pctOf(raw.재료비.months, raw.매출.months, 0, M - 1),
+      remain: pctOf(raw.재료비.months, raw.매출.months, M, 11),
       annual: pctOf(raw.재료비.months, raw.매출.months, 0, 11),
       target: raw.매출.target ? +(raw.재료비.target / raw.매출.target * 100).toFixed(2) : 0,
     };
@@ -519,12 +520,17 @@ async function loadLiveData() {
 
 // ---------- 프로젝트 드릴다운 팝업 ----------
 const BIZ_MAP = { all: null, infra: "인프라사업팀", fa: "FA사업팀", strategy: "전략/대외사업팀" };
-const MONTH_LABEL = { cum: `1~${CLOSING_MONTH}월 누계` };
+const MONTH_LABEL = { cum: `1~${CLOSING_MONTH}월 누계`, remain: `${CLOSING_MONTH + 1}~12월 잔여` };
 
 function monthTargets(monthKey) {
   if (monthKey === "cum") {
     const nums = [], yms = [];
     for (let m = 1; m <= CLOSING_MONTH; m++) { nums.push(m); yms.push(`2026${String(m).padStart(2, "0")}`); }
+    return { nums, yms };
+  }
+  if (monthKey === "remain") {
+    const nums = [], yms = [];
+    for (let m = CLOSING_MONTH + 1; m <= 12; m++) { nums.push(m); yms.push(`2026${String(m).padStart(2, "0")}`); }
     return { nums, yms };
   }
   const n = parseInt(monthKey, 10); // 개별 월(1~12) 카드 클릭
@@ -723,7 +729,7 @@ function kpiCard(name, d, unit, badgeStatus) {
   </div>`;
 }
 
-function cmpRow(label, unitTxt, targetVal, cumVal, annualVal, vsTargetDelta, vsTargetPct, ppMode, invert, drill) {
+function cmpRow(label, unitTxt, targetVal, cumVal, remainVal, annualVal, vsTargetDelta, vsTargetPct, ppMode, invert, drill) {
   const suffix = ppMode ? "%p" : (unitTxt === "%" ? "%p" : "억");
   const pctSuffix = ppMode ? "%p" : "%";
   function numStr(v) { return suffix === "억" ? fmt(v, 1) : v.toFixed(1); }
@@ -733,12 +739,16 @@ function cmpRow(label, unitTxt, targetVal, cumVal, annualVal, vsTargetDelta, vsT
     const cls = deltaClass(delta, invert);
     return `<td class="num"><span class="delta ${cls}"><span class="arrow">${arrow(delta)}</span> ${numStr(Math.abs(delta))}${suffix}${pct!==undefined?` (${fmt(pct,0)}${pctSuffix})`:''}</span></td>`;
   }
-  const cumCls = `num strong ${typeof cumVal === 'number' && cumVal < 0 ? 'neg' : ''}${drill ? ' cmp-cum-drill' : ''}`;
-  const cumClick = drill ? ` onclick="openProjectModal('${drill.unitKey}','${drill.metric}','cum')"` : "";
+  function drillCell(v, monthKey) {
+    const cls = `num strong ${typeof v === 'number' && v < 0 ? 'neg' : ''}${drill ? ' cmp-cum-drill' : ''}`;
+    const click = drill ? ` onclick="openProjectModal('${drill.unitKey}','${drill.metric}','${monthKey}')"` : "";
+    return `<td class="${cls}"${click}>${cell(v)}</td>`;
+  }
   return `<tr>
     <td class="metric">${label}</td>
     <td class="num strong ${typeof targetVal === 'number' && targetVal < 0 ? 'neg' : ''}">${cell(targetVal)}</td>
-    <td class="${cumCls}"${cumClick}>${cell(cumVal)}</td>
+    ${drillCell(cumVal, "cum")}
+    ${drillCell(remainVal, "remain")}
     <td class="num strong ${typeof annualVal === 'number' && annualVal < 0 ? 'neg' : ''}">${cell(annualVal)}</td>
     ${deltaCell(vsTargetDelta, vsTargetPct)}
   </tr>`;
@@ -776,18 +786,18 @@ function renderPanel(u) {
   metricNames.forEach(name => {
     const d = u.kpi[name];
     const drill = (name === "수주" || name === "매출") ? { unitKey: u.key, metric: name } : null;
-    cmpRows.push(cmpRow(name, "억", d.target, d.cum, d.annual,
+    cmpRows.push(cmpRow(name, "억", d.target, d.cum, d.annual - d.cum, d.annual,
       d.target ? (d.annual-d.target) : null, d.target ? +(((d.annual-d.target)/d.target)*100).toFixed(1) : null,
       false, false, drill));
   });
   if (u.extra && u.extra.OPEX) {
     const o = u.extra.OPEX;
-    cmpRows.push(cmpRow("OPEX", "억", o.target, o.cum, o.annual,
+    cmpRows.push(cmpRow("OPEX", "억", o.target, o.cum, o.annual - o.cum, o.annual,
       o.target ? (o.annual-o.target) : null, o.target ? +(((o.annual-o.target)/o.target)*100).toFixed(1) : null));
   }
   if (u.extra && u.extra.재료비율) {
     const m = u.extra.재료비율;
-    cmpRows.push(cmpRow("재료비율", "%", m.target, m.cum, m.annual,
+    cmpRows.push(cmpRow("재료비율", "%", m.target, m.cum, m.remain, m.annual,
       m.target !== undefined ? +(m.annual-m.target).toFixed(1) : null, undefined, true, true));
   }
 
@@ -833,7 +843,8 @@ function renderPanel(u) {
             <tr>
               <th>구분</th>
               <th class="grp">경영계획</th>
-              <th class="grp">누계 (1~7월)</th>
+              <th class="grp">누계 (1~${CLOSING_MONTH}월)</th>
+              <th class="grp">잔여 (${CLOSING_MONTH+1}~12월)</th>
               <th class="grp">연간 (추정)</th>
               <th class="grp">목표대비</th>
             </tr>
