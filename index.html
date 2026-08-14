@@ -436,6 +436,48 @@ function aggregateRevenue(wonRows, pipeRows, bizFilter) {
   return months;
 }
 
+// 재료비도 매출과 동일한 원장 구조에서 직접 집계(2026-08-14, 사용자 확인):
+// 진행(계약)_리스트 AH:AS = 01~12월 매입(재료비) 인식, R:AC(매출)와 완전 대칭 구조.
+// 사전(펀넬)_리스트 AL:AW = 01~12월 매입(재료비) 인식, V:AG(매출)와 대칭. 필터는 매출과 동일(수주확도 적용 1원 이상).
+function buildWonMaterialRows(grid, dataStart) {
+  const rows = [];
+  for (let i = dataStart; i < grid.length; i++) {
+    const r = grid[i];
+    const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
+    if (!biz) continue;
+    const months = [];
+    for (let c = 33; c <= 44; c++) months.push(Number(r[c]) || 0); // AH:AS
+    rows.push([biz, ...months]);
+  }
+  return rows;
+}
+function buildPipelineMaterialRows(grid, dataStart) {
+  const rows = [];
+  for (let i = dataStart; i < grid.length; i++) {
+    const r = grid[i];
+    const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
+    if (!biz) continue;
+    const applied = Number(r[2]) || 0; // C = 수주확도 적용
+    const months = [];
+    for (let c = 37; c <= 48; c++) months.push(Number(r[c]) || 0); // AL:AW
+    rows.push([biz, applied, ...months]);
+  }
+  return rows;
+}
+function aggregateMaterialCost(wonMatRows, pipeMatRows, bizFilter) {
+  const months = new Array(12).fill(0);
+  wonMatRows.forEach(r => {
+    if (bizFilter && r[0] !== bizFilter) return;
+    for (let m = 0; m < 12; m++) months[m] += r[1 + m] || 0;
+  });
+  pipeMatRows.forEach(r => {
+    if (bizFilter && r[0] !== bizFilter) return;
+    if (!r[1] || r[1] < 1) return;
+    for (let m = 0; m < 12; m++) months[m] += r[2 + m] || 0;
+  });
+  return months;
+}
+
 function aggregateOrders(wonRows, pipeRows, bizFilter) {
   const months = new Array(12).fill(0);
   wonRows.forEach(r => {
@@ -476,38 +518,7 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
   return s;
 }
 
-// 영업이익/재료비율은 GS 피벗(매출_매입 계열)이 구글시트 변환 후 확정계약분까지 축소되어 나오는 것을 확인(2026-08-13).
-// 실제원가 원장은 7월(마감월) 데이터가 없고 8~12월 예측치도 없어 원장 기반 재구성이 불가능 —
-// 검증된 '26.07 스냅샷 값으로 고정(실시간 아님). 원천이 파악되면 교체할 것.
-const STATIC_SNAPSHOT = {
-  all: {
-    영업이익: { target: 22.79, cum: -5.05, annual: 21.01, jul: 0.33, aug: 7.13, remain: 18.9 },
-    재료비율: { cum: 74.48, annual: 71.01, target: 69.99 },
-    monthlyMaterialPct: { jul: 68.26, aug: 67.44, remain: 68.37 },
-    매출annual: 355.82,
-  },
-  infra: {
-    영업이익: { target: 6.40, cum: -8.31, annual: 0.69, jul: -1.56, aug: 2.02, remain: 7.0 },
-    재료비율: { cum: 81.04, annual: 76.51, target: 73.85 },
-    monthlyMaterialPct: { jul: 59.16, aug: 76.40, remain: 71.42 },
-    매출annual: 189.34,
-  },
-  fa: {
-    // 전사 = 인프라+FA+전략 항등식(메모리로 검증됨)에서 역산 + GS 목표 재료비율(64.3%, 깨지지 않은 E열)로 교차검증 완료.
-    영업이익: { target: 7.43, cum: 4.28, annual: 10.04, jul: -0.91, aug: -0.20, remain: 5.9 },
-    재료비율: { cum: 64.13, annual: 64.00, target: 64.33 },
-    monthlyMaterialPct: { jul: 64.00, aug: 64.00, remain: 64.00 },
-    매출annual: 107.90,
-  },
-  strategy: {
-    영업이익: { target: 8.96, cum: -1.02, annual: 10.28, jul: 2.80, aug: 5.31, remain: 6.0 },
-    재료비율: { cum: 75.57, annual: 66.10, target: 66.64 },
-    monthlyMaterialPct: { jul: 75.51, aug: 55.10, remain: 66.11 },
-    매출annual: 58.58,
-  },
-};
-
-function buildUnitData(gsGrid, wonRows, pipeRows, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
+function buildUnitData(gsGrid, wonRows, pipeRows, wonMatRows, pipeMatRows, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
   const blockStarts = findGSBlockStarts(gsGrid);
   const M = CLOSING_MONTH;
   return BIZ_UNITS.map((meta, i) => {
@@ -521,21 +532,34 @@ function buildUnitData(gsGrid, wonRows, pipeRows, wonGrid, wonDataStart, pipeGri
     const orderMonths = aggregateOrders(wonRows, pipeRows, meta.biz);
     const 수주 = periodize(raw.수주.target, orderMonths);
 
+    const materialMonths = aggregateMaterialCost(wonMatRows, pipeMatRows, meta.biz);
+    function pctOf(numArr, denArr, fromIdx, toIdx) {
+      const n = sumRange(numArr, fromIdx, toIdx), d = sumRange(denArr, fromIdx, toIdx);
+      return d ? +(n / d * 100).toFixed(2) : 0;
+    }
+    const 재료비율 = {
+      cum: pctOf(materialMonths, revenueMonths, 0, M - 1),
+      annual: pctOf(materialMonths, revenueMonths, 0, 11),
+      target: raw.매출.target ? +(raw.재료비.target / raw.매출.target * 100).toFixed(2) : 0, // E열(경영계획)은 피벗이 아니라 그대로 신뢰
+    };
+    const monthlyMaterialPct = {
+      jul: revenueMonths[M - 1] ? +(materialMonths[M - 1] / revenueMonths[M - 1] * 100).toFixed(2) : 0,
+      aug: revenueMonths[M] ? +(materialMonths[M] / revenueMonths[M] * 100).toFixed(2) : 0,
+      remain: pctOf(materialMonths, revenueMonths, M + 1, 11),
+    };
+
     const OPEXmonths = raw.기술직접원가.months.map((v, idx) =>
       v + raw.직접경비.months[idx] + raw.영업OPEX.months[idx] + raw.기술OPEX간접비용.months[idx]);
     const OPEXtarget = raw.기술직접원가.target + raw.직접경비.target + raw.영업OPEX.target + raw.기술OPEX간접비용.target;
     const OPEX = periodize(OPEXtarget, OPEXmonths);
 
-    // 영업이익/재료비율: STATIC_SNAPSHOT 고정값(실시간 아님) — 위 주석 참고.
-    const snap = STATIC_SNAPSHOT[meta.key];
-    const 영업이익 = snap.영업이익;
-    const 재료비율 = snap.재료비율;
-    const monthlyMaterialPct = snap.monthlyMaterialPct;
+    // 영업이익 = 매출 − 재료비 − OPEX − 공통비 (매출/재료비는 원장 라이브, OPEX/공통비는 GS의 별도 피벗 — 깨지지 않음, 기존 스냅샷과 일치 검증됨)
+    const opProfitMonths = revenueMonths.map((v, idx) => v - materialMonths[idx] - OPEXmonths[idx] - raw.공통비.months[idx]);
+    const 영업이익 = periodize(raw.영업이익.target, opProfitMonths);
 
     const backlogRevenue = sumBacklogRevenue(wonGrid, wonDataStart, meta.biz);
     const funnelTarget = sumFunnelTarget(pipeGrid, pipeDataStart, meta.biz);
-    // 영업이익률(예상)도 스냅샷 영업이익 ÷ 스냅샷 매출로 계산 (실시간 매출과 섞지 않음 — 자체 정합성 유지)
-    const opProfitRatio = snap.매출annual ? (영업이익.annual / snap.매출annual * 100) : 0;
+    const opProfitRatio = 매출.annual ? (영업이익.annual / 매출.annual * 100) : 0;
 
     return {
       key: meta.key, label: meta.label, tag: meta.tag,
@@ -545,7 +569,7 @@ function buildUnitData(gsGrid, wonRows, pipeRows, wonGrid, wonDataStart, pipeGri
       status: [
         { label: `수주잔고 매출 (${M}월 마감 기준)`, val: fmt(backlogRevenue / 1e8, 1), unit: "억원" },
         { label: "펀넬 매출 (연간목표)", val: fmt(funnelTarget / 1e8, 1), unit: "억원" },
-        { label: "연간 영업이익률 (예상, 스냅샷)", val: fmt(opProfitRatio, 1), unit: "%" },
+        { label: "연간 영업이익률 (예상)", val: fmt(opProfitRatio, 1), unit: "%" },
       ],
     };
   });
@@ -559,13 +583,15 @@ async function loadLiveData() {
   const [gsGrid, wonGrid, pipeGrid] = await Promise.all([
     fetchGrid("GS"),
     fetchGrid("진행(계약)_리스트"), // range 지정 시 구글시트 헤더 자동인식 방식이 바뀌어 행 오프셋이 달라짐 — 전체 fetch 유지
-    fetchGrid("사전(펀넬)_리스트", "A1:AG40"),
+    fetchGrid("사전(펀넬)_리스트", "A1:AY40"),
   ]);
   const wonDataStart = findWonDataStart(wonGrid);
   const pipeDataStart = findPipeDataStart(pipeGrid);
   PROJECTS_WON = buildWonList(wonGrid, wonDataStart);
   PROJECTS_PIPELINE = buildPipelineList(pipeGrid, pipeDataStart);
-  UNITS = buildUnitData(gsGrid, PROJECTS_WON, PROJECTS_PIPELINE, wonGrid, wonDataStart, pipeGrid, pipeDataStart);
+  const wonMatRows = buildWonMaterialRows(wonGrid, wonDataStart);
+  const pipeMatRows = buildPipelineMaterialRows(pipeGrid, pipeDataStart);
+  UNITS = buildUnitData(gsGrid, PROJECTS_WON, PROJECTS_PIPELINE, wonMatRows, pipeMatRows, wonGrid, wonDataStart, pipeGrid, pipeDataStart);
 }
 
 // ---------- 프로젝트 드릴다운 팝업 ----------
@@ -813,16 +839,14 @@ function selectTab(key) {
 
 function renderPanel(u) {
   const metricNames = Object.keys(u.kpi);
-  const STATIC_METRICS = new Set(["영업이익"]);
   const kpiCards = metricNames.map(name =>
-    kpiCard(STATIC_METRICS.has(name) ? `${name} · 스냅샷` : name, u.kpi[name], EOK, badgeFor(name, u.kpi[name]))
+    kpiCard(name, u.kpi[name], EOK, badgeFor(name, u.kpi[name]))
   ).join("");
 
   const cmpRows = [];
   metricNames.forEach(name => {
     const d = u.kpi[name];
-    const label = STATIC_METRICS.has(name) ? `${name} (스냅샷)` : name;
-    cmpRows.push(cmpRow(label, "억", d.target, d.cum, d.annual,
+    cmpRows.push(cmpRow(name, "억", d.target, d.cum, d.annual,
       d.target ? (d.annual-d.target) : null, d.target ? +(((d.annual-d.target)/d.target)*100).toFixed(1) : null));
   });
   if (u.extra && u.extra.OPEX) {
@@ -832,7 +856,7 @@ function renderPanel(u) {
   }
   if (u.extra && u.extra.재료비율) {
     const m = u.extra.재료비율;
-    cmpRows.push(cmpRow("재료비율 (스냅샷)", "%", m.target, m.cum, m.annual,
+    cmpRows.push(cmpRow("재료비율", "%", m.target, m.cum, m.annual,
       m.target !== undefined ? +(m.annual-m.target).toFixed(1) : null, undefined, true, true));
   }
 
@@ -848,15 +872,14 @@ function renderPanel(u) {
       const drillable = (name === "수주" || name === "매출") && u.key !== "etc";
       const rowCls = `m-row ${drillable?'clickable':''}`;
       const rowClick = drillable ? ` onclick="openProjectModal('${u.key}','${name}','${md.key}')"` : "";
-      const label = name === "영업이익" ? "영업이익*" : name;
-      lines.push(`<div class="${rowCls}"${rowClick}><span class="m-label">${label}</span><span class="m-val ${v<0?'neg':''}">${fmt(v,1)}억</span></div>`);
+      lines.push(`<div class="${rowCls}"${rowClick}><span class="m-label">${name}</span><span class="m-val ${v<0?'neg':''}">${fmt(v,1)}억</span></div>`);
     });
     if (u.extra && u.extra.OPEX) {
       const v = u.extra.OPEX[md.key];
       lines.push(`<div class="m-row"><span class="m-label">OPEX</span><span class="m-val ${v<0?'neg':''}">${fmt(v,1)}억</span></div>`);
     }
     if (u.monthlyMaterialPct && u.monthlyMaterialPct[md.key] !== undefined) {
-      lines.push(`<div class="m-row"><span class="m-label">재료비율*</span><span class="m-val">${u.monthlyMaterialPct[md.key]}%</span></div>`);
+      lines.push(`<div class="m-row"><span class="m-label">재료비율</span><span class="m-val">${u.monthlyMaterialPct[md.key]}%</span></div>`);
     }
     return `<div class="month-card">
       <div class="m-head"><span class="m-name">${md.name}</span><span class="m-kind ${md.kind}">${md.label}</span></div>
@@ -892,7 +915,7 @@ function renderPanel(u) {
       </div>
     </div>
 
-    <div class="panel-title"><h2>월별 전망</h2><span class="hint">7월 실적 · 8월 계획 · 9~12월 잔여 계획 (수주/매출 클릭 시 상세 현황 확인 가능) · * = '26.07 스냅샷 고정값(비실시간)</span></div>
+    <div class="panel-title"><h2>월별 전망</h2><span class="hint">7월 실적 · 8월 계획 · 9~12월 잔여 계획 (수주/매출 클릭 시 상세 현황 확인 가능)</span></div>
     <div class="month-grid">${monthCards}</div>
 
     ${statusStrip}
@@ -907,7 +930,7 @@ async function init() {
     selectTab("all");
     const now = new Date();
     document.getElementById("dataSource").textContent =
-      `구글시트 실시간 연동(수주·매출·OPEX) · 영업이익·재료비율은 '26.07 스냅샷 고정(비실시간) · 마지막 갱신 ${now.toLocaleString("ko-KR")}`;
+      `구글시트 실시간 연동 · GS 시트 + 진행(계약)/사전(펀넬) 원장 기준 · 마지막 갱신 ${now.toLocaleString("ko-KR")}`;
   } catch (err) {
     panelEl.innerHTML = `<div class="panel-title"><h2>데이터를 불러오지 못했습니다</h2><span class="hint">${err.message || err}</span></div>
       <div class="table-card" style="padding:20px;"><button type="button" onclick="init()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--ink-900);cursor:pointer;">다시 시도</button></div>`;
