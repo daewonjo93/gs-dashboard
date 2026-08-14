@@ -212,6 +212,8 @@
   .m-row.clickable:hover .m-val:not(.neg) { color: var(--accent-2); }
   .m-row.clickable .m-val { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--ink-400); }
   .m-row.clickable:hover .m-val { text-decoration-color: var(--accent-2); }
+  .cmp-cum-drill { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--ink-400); }
+  .cmp-cum-drill:hover { color: var(--accent-2); text-decoration-color: var(--accent-2); }
   .bar-track { position: relative; height: 4px; background: var(--surface-3); border-radius: 3px; margin-top: 4px; overflow: hidden; }
   .bar-fill { position: absolute; inset: 0 auto 0 0; background: var(--accent-2); border-radius: 3px; }
 
@@ -512,11 +514,16 @@ async function loadLiveData() {
 
 // ---------- 프로젝트 드릴다운 팝업 ----------
 const BIZ_MAP = { all: null, infra: "인프라사업팀", fa: "FA사업팀", strategy: "전략/대외사업팀" };
-const MONTH_LABEL = { jul: "7월", aug: "8월", remain: "9~12월(잔여)" };
+const MONTH_LABEL = { jul: "7월", aug: "8월", remain: "9~12월(잔여)", cum: `1~${CLOSING_MONTH}월 누계` };
 
 function monthTargets(monthKey) {
   if (monthKey === "jul") return { nums: [7], yms: ["202607"] };
   if (monthKey === "aug") return { nums: [8], yms: ["202608"] };
+  if (monthKey === "cum") {
+    const nums = [], yms = [];
+    for (let m = 1; m <= CLOSING_MONTH; m++) { nums.push(m); yms.push(`2026${String(m).padStart(2, "0")}`); }
+    return { nums, yms };
+  }
   return { nums: [9, 10, 11, 12], yms: ["202609", "202610", "202611", "202612"] };
 }
 
@@ -712,7 +719,7 @@ function kpiCard(name, d, unit, badgeStatus) {
   </div>`;
 }
 
-function cmpRow(label, unitTxt, targetVal, cumVal, annualVal, vsTargetDelta, vsTargetPct, ppMode, invert) {
+function cmpRow(label, unitTxt, targetVal, cumVal, annualVal, vsTargetDelta, vsTargetPct, ppMode, invert, drill) {
   const suffix = ppMode ? "%p" : (unitTxt === "%" ? "%p" : "억");
   const pctSuffix = ppMode ? "%p" : "%";
   function numStr(v) { return suffix === "억" ? fmt(v, 1) : v.toFixed(1); }
@@ -722,10 +729,12 @@ function cmpRow(label, unitTxt, targetVal, cumVal, annualVal, vsTargetDelta, vsT
     const cls = deltaClass(delta, invert);
     return `<td class="num"><span class="delta ${cls}"><span class="arrow">${arrow(delta)}</span> ${numStr(Math.abs(delta))}${suffix}${pct!==undefined?` (${fmt(pct,0)}${pctSuffix})`:''}</span></td>`;
   }
+  const cumCls = `num strong ${typeof cumVal === 'number' && cumVal < 0 ? 'neg' : ''}${drill ? ' cmp-cum-drill' : ''}`;
+  const cumClick = drill ? ` onclick="openProjectModal('${drill.unitKey}','${drill.metric}','cum')"` : "";
   return `<tr>
     <td class="metric">${label}</td>
     <td class="num strong ${typeof targetVal === 'number' && targetVal < 0 ? 'neg' : ''}">${cell(targetVal)}</td>
-    <td class="num strong ${typeof cumVal === 'number' && cumVal < 0 ? 'neg' : ''}">${cell(cumVal)}</td>
+    <td class="${cumCls}"${cumClick}>${cell(cumVal)}</td>
     <td class="num strong ${typeof annualVal === 'number' && annualVal < 0 ? 'neg' : ''}">${cell(annualVal)}</td>
     ${deltaCell(vsTargetDelta, vsTargetPct)}
   </tr>`;
@@ -762,8 +771,10 @@ function renderPanel(u) {
   const cmpRows = [];
   metricNames.forEach(name => {
     const d = u.kpi[name];
+    const drill = (name === "수주" || name === "매출") ? { unitKey: u.key, metric: name } : null;
     cmpRows.push(cmpRow(name, "억", d.target, d.cum, d.annual,
-      d.target ? (d.annual-d.target) : null, d.target ? +(((d.annual-d.target)/d.target)*100).toFixed(1) : null));
+      d.target ? (d.annual-d.target) : null, d.target ? +(((d.annual-d.target)/d.target)*100).toFixed(1) : null,
+      false, false, drill));
   });
   if (u.extra && u.extra.OPEX) {
     const o = u.extra.OPEX;
