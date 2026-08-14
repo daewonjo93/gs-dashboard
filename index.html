@@ -807,7 +807,7 @@ function renderPanel(u) {
     if (u.monthly && u.monthly.재료비율) {
       lines.push(`<div class="m-row"><span class="m-label">재료비율</span><span class="m-val">${u.monthly.재료비율[m - 1]}%</span></div>`);
     }
-    return `<div class="month-card">
+    return `<div class="month-card" data-month="${m}">
       <div class="m-head"><span class="m-name">${m}월</span><span class="m-kind ${kind}">${label}</span></div>
       ${lines.join("")}
     </div>`;
@@ -846,6 +846,10 @@ function renderPanel(u) {
 
     ${statusStrip}
   `;
+
+  // 처음 열었을 때 마지막 실적월(마감월)이 맨 왼쪽에 오도록 스크롤
+  const closingCard = panelEl.querySelector(`.month-card[data-month="${CLOSING_MONTH}"]`);
+  if (closingCard) closingCard.scrollIntoView({ behavior: "auto", block: "nearest", inline: "start" });
 }
 
 async function init() {
