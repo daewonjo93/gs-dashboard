@@ -320,9 +320,9 @@ async function fetchGrid(sheetName, range) {
 
 const BIZ_UNITS = [
   { key: "all", label: "전사", tag: "종합", biz: null },
-  { key: "infra", label: "인프라사업부", tag: "사업부", biz: "인프라사업팀" },
-  { key: "fa", label: "FA사업팀", tag: "사업부", biz: "FA사업팀" },
-  { key: "strategy", label: "전략·대외사업팀", tag: "사업부", biz: "전략/대외사업팀" },
+  { key: "infra", label: "인프라사업부", tag: "", biz: "인프라사업팀" },
+  { key: "fa", label: "FA사업팀", tag: "", biz: "FA사업팀" },
+  { key: "strategy", label: "전략·대외사업팀", tag: "", biz: "전략/대외사업팀" },
 ];
 
 // GS 시트 블록 내 행 오프셋(수주 행 기준 +n). goodus_dashboard_gs_sheet_formulas 메모리 참고.
@@ -765,7 +765,7 @@ function buildTabs() {
     const btn = document.createElement("button");
     btn.dataset.key = u.key;
     btn.className = i === 0 ? "active" : "";
-    btn.innerHTML = `${u.label}<span class="unit-tag">${u.tag}</span>`;
+    btn.innerHTML = `${u.label}${u.tag ? `<span class="unit-tag">${u.tag}</span>` : ""}`;
     btn.addEventListener("click", () => selectTab(u.key));
     tabsEl.appendChild(btn);
   });
