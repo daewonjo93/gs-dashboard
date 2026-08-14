@@ -784,6 +784,7 @@ function selectTab(key) {
   [...tabsEl.children].forEach(b => b.classList.toggle("active", b.dataset.key === key));
   const u = UNITS.find(x => x.key === key);
   renderPanel(u);
+  window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 function renderPanel(u) {
