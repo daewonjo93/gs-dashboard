@@ -194,8 +194,8 @@
   .delta .arrow { font-size: 10px; }
 
   /* ---------- Monthly outlook ---------- */
-  .month-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .month-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .month-grid { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; scroll-padding-left: 0; }
+  .month-card { flex: 0 0 calc((100% - 24px) / 3); scroll-snap-align: start; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
   .month-card .m-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .month-card .m-name { font-size: 13px; font-weight: 800; color: var(--ink-900); }
   .month-card .m-kind { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
@@ -255,7 +255,7 @@
 
   @media (max-width: 860px) {
     .kpi-row { grid-template-columns: 1fr; }
-    .month-grid { grid-template-columns: 1fr; }
+    .month-card { flex-basis: calc(100% - 40px); }
     .status-strip { grid-template-columns: 1fr; }
   }
 </style>
@@ -464,12 +464,6 @@ function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
       annual: pctOf(raw.재료비.months, raw.매출.months, 0, 11),
       target: raw.매출.target ? +(raw.재료비.target / raw.매출.target * 100).toFixed(2) : 0,
     };
-    const monthlyMaterialPct = {
-      jul: raw.매출.months[M - 1] ? +(raw.재료비.months[M - 1] / raw.매출.months[M - 1] * 100).toFixed(2) : 0,
-      aug: raw.매출.months[M] ? +(raw.재료비.months[M] / raw.매출.months[M] * 100).toFixed(2) : 0,
-      remain: pctOf(raw.재료비.months, raw.매출.months, M + 1, 11),
-    };
-
     const OPEXmonths = raw.기술직접원가.months.map((v, idx) =>
       v + raw.직접경비.months[idx] + raw.영업OPEX.months[idx] + raw.기술OPEX간접비용.months[idx]);
     const OPEXtarget = raw.기술직접원가.target + raw.직접경비.target + raw.영업OPEX.target + raw.기술OPEX간접비용.target;
@@ -481,11 +475,20 @@ function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
     const funnelTarget = sumFunnelTarget(pipeGrid, pipeDataStart, meta.biz);
     const opProfitRatio = 매출.annual ? (영업이익.annual / 매출.annual * 100) : 0;
 
+    // 월별 전망(1~12월 개별 카드)용 — 원시 12개월 배열을 억 단위로 변환해서 그대로 노출.
+    const monthly = {
+      수주: raw.수주.months.map(v => v / 1e8),
+      매출: raw.매출.months.map(v => v / 1e8),
+      영업이익: raw.영업이익.months.map(v => v / 1e8),
+      OPEX: OPEXmonths.map(v => v / 1e8),
+      재료비율: raw.매출.months.map((v, idx) => v ? +(raw.재료비.months[idx] / v * 100).toFixed(2) : 0),
+    };
+
     return {
       key: meta.key, label: meta.label, tag: meta.tag,
       kpi: { 수주, 매출, 영업이익 },
       extra: { 재료비율, OPEX },
-      monthlyMaterialPct,
+      monthly,
       status: [
         { label: `수주잔고 매출 (${M}월 마감 기준)`, val: fmt(backlogRevenue / 1e8, 1), unit: "억원" },
         { label: "펀넬 매출 (연간목표)", val: fmt(funnelTarget / 1e8, 1), unit: "억원" },
@@ -514,17 +517,16 @@ async function loadLiveData() {
 
 // ---------- 프로젝트 드릴다운 팝업 ----------
 const BIZ_MAP = { all: null, infra: "인프라사업팀", fa: "FA사업팀", strategy: "전략/대외사업팀" };
-const MONTH_LABEL = { jul: "7월", aug: "8월", remain: "9~12월(잔여)", cum: `1~${CLOSING_MONTH}월 누계` };
+const MONTH_LABEL = { cum: `1~${CLOSING_MONTH}월 누계` };
 
 function monthTargets(monthKey) {
-  if (monthKey === "jul") return { nums: [7], yms: ["202607"] };
-  if (monthKey === "aug") return { nums: [8], yms: ["202608"] };
   if (monthKey === "cum") {
     const nums = [], yms = [];
     for (let m = 1; m <= CLOSING_MONTH; m++) { nums.push(m); yms.push(`2026${String(m).padStart(2, "0")}`); }
     return { nums, yms };
   }
-  return { nums: [9, 10, 11, 12], yms: ["202609", "202610", "202611", "202612"] };
+  const n = parseInt(monthKey, 10); // 개별 월(1~12) 카드 클릭
+  return { nums: [n], yms: [`2026${String(n).padStart(2, "0")}`] };
 }
 
 let modalCtx = null; // { unitKey, metric, monthKey }
@@ -581,9 +583,9 @@ function selectModalMonth(subMonth) {
 
 function renderProjectModal(subMonth) {
   const { unitLabel, metric, monthKey } = modalCtx;
-  const monthLabel = MONTH_LABEL[monthKey];
   const { rows, total } = computeRows(modalCtx.unitKey, metric, monthKey, subMonth);
   const mt = monthTargets(monthKey);
+  const monthLabel = MONTH_LABEL[monthKey] || `${mt.nums[0]}월`;
 
   document.getElementById("projModalTitle").textContent =
     `${unitLabel} · ${subMonth ? subMonth + "월" : monthLabel} ${metric} 프로젝트`;
@@ -787,29 +789,26 @@ function renderPanel(u) {
       m.target !== undefined ? +(m.annual-m.target).toFixed(1) : null, undefined, true, true));
   }
 
-  const monthDefs = [
-    { key: "jul", name: "7월", kind: "actual", label: "실적" },
-    { key: "aug", name: "8월", kind: "plan", label: "계획" },
-    { key: "remain", name: "잔여(9~12월)", kind: "plan", label: "계획" }
-  ];
-  const monthCards = monthDefs.map(md => {
+  const monthCards = Array.from({ length: 12 }, (_, idx) => idx + 1).map(m => {
+    const kind = m <= CLOSING_MONTH ? "actual" : "plan";
+    const label = m <= CLOSING_MONTH ? "실적" : "계획";
     const lines = [];
     metricNames.forEach(name => {
-      const v = u.kpi[name][md.key];
+      const v = u.monthly[name][m - 1];
       const drillable = (name === "수주" || name === "매출") && u.key !== "etc";
       const rowCls = `m-row ${drillable?'clickable':''}`;
-      const rowClick = drillable ? ` onclick="openProjectModal('${u.key}','${name}','${md.key}')"` : "";
+      const rowClick = drillable ? ` onclick="openProjectModal('${u.key}','${name}','${m}')"` : "";
       lines.push(`<div class="${rowCls}"${rowClick}><span class="m-label">${name}</span><span class="m-val ${v<0?'neg':''}">${fmt(v,1)}억</span></div>`);
     });
-    if (u.extra && u.extra.OPEX) {
-      const v = u.extra.OPEX[md.key];
+    if (u.monthly && u.monthly.OPEX) {
+      const v = u.monthly.OPEX[m - 1];
       lines.push(`<div class="m-row"><span class="m-label">OPEX</span><span class="m-val ${v<0?'neg':''}">${fmt(v,1)}억</span></div>`);
     }
-    if (u.monthlyMaterialPct && u.monthlyMaterialPct[md.key] !== undefined) {
-      lines.push(`<div class="m-row"><span class="m-label">재료비율</span><span class="m-val">${u.monthlyMaterialPct[md.key]}%</span></div>`);
+    if (u.monthly && u.monthly.재료비율) {
+      lines.push(`<div class="m-row"><span class="m-label">재료비율</span><span class="m-val">${u.monthly.재료비율[m - 1]}%</span></div>`);
     }
     return `<div class="month-card">
-      <div class="m-head"><span class="m-name">${md.name}</span><span class="m-kind ${md.kind}">${md.label}</span></div>
+      <div class="m-head"><span class="m-name">${m}월</span><span class="m-kind ${kind}">${label}</span></div>
       ${lines.join("")}
     </div>`;
   }).join("");
@@ -842,7 +841,7 @@ function renderPanel(u) {
       </div>
     </div>
 
-    <div class="panel-title"><h2>월별 전망</h2><span class="hint">7월 실적 · 8월 계획 · 9~12월 잔여 계획 (수주/매출 클릭 시 상세 현황 확인 가능)</span></div>
+    <div class="panel-title"><h2>월별 전망</h2><span class="hint">1~${CLOSING_MONTH}월 실적 · ${CLOSING_MONTH+1}~12월 계획 · 옆으로 스크롤해서 전체 12개월 확인 (수주/매출 클릭 시 상세 현황 확인 가능)</span></div>
     <div class="month-grid">${monthCards}</div>
 
     ${statusStrip}
