@@ -430,6 +430,7 @@ function sumBacklogRevenue(wonGrid, dataStart, bizFilter) {
   }
   return s;
 }
+// 펀넬 매출(연간목표) = C열(수주확도 적용)이 "적용"인 프로젝트만, AI열(매출 당해합계) 합산 (2026-08-14, 사용자 확인)
 function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
   let s = 0;
   for (let i = dataStart; i < pipeGrid.length; i++) {
@@ -437,7 +438,8 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
     if (bizFilter && biz !== bizFilter) continue;
-    s += Number(r[16]) || 0; // Q = 예상수주금액 (2026-08-14 새 시트에서 +1 밀림)
+    if (stripSpaces(r[2]) !== "적용") continue; // C = 수주확도 적용
+    s += Number(r[34]) || 0; // AI = 매출 당해합계
   }
   return s;
 }
