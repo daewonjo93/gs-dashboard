@@ -734,7 +734,7 @@ function kpiCard(name, d, unit, badgeStatus) {
       <div class="item"><span class="l">연간목표</span><span class="v flat">${d.target?fmt(d.target,1)+'억':'–'}</span></div>
       <div class="item"><span class="l">연간예상</span><span class="v ${d.annual<0?'down':'flat'}">${fmt(d.annual,1)}억</span></div>
       <div class="item"><span class="l">목표 달성률</span><span class="v ${achieve===null?'flat':(achieve>=100?'up':'down')}">${achieve===null?'–':fmt(achieve,0)+'%'}</span></div>
-      <div class="item"><span class="l">7월 실적</span><span class="v ${d.jul<0?'down':'flat'}">${fmt(d.jul,1)}억</span></div>
+      <div class="item"><span class="l">${CLOSING_MONTH+1}월 예상 실적</span><span class="v ${d.aug<0?'down':'flat'}">${fmt(d.aug,1)}억</span></div>
     </div>
   </div>`;
 }
