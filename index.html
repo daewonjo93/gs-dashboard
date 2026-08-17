@@ -768,9 +768,19 @@ function cmpRow(label, unitTxt, targetVal, cumVal, remainVal, annualVal, vsTarge
 const tabsEl = document.getElementById("tabs");
 const panelEl = document.getElementById("panel");
 
+// URL 파라미터(?unit=infra / ?unit=strategy)로 탭 구성을 좁혀서 사업부 전용 링크를 만들 수 있게 함.
+// 미지정(기본) = 전사 화면 그대로(탭 5개 전부).
+const VIEW_CONFIGS = {
+  infra: { keys: ["infra"], default: "infra" },
+  strategy: { keys: ["strategybu", "fa", "strategy"], default: "strategybu" },
+};
+const viewParam = new URLSearchParams(location.search).get("unit");
+const VIEW = VIEW_CONFIGS[viewParam] || null;
+
 function buildTabs() {
   tabsEl.innerHTML = "";
-  UNITS.forEach((u, i) => {
+  const visibleUnits = VIEW ? UNITS.filter(u => VIEW.keys.includes(u.key)) : UNITS;
+  visibleUnits.forEach((u, i) => {
     const btn = document.createElement("button");
     btn.dataset.key = u.key;
     btn.className = i === 0 ? "active" : "";
@@ -778,6 +788,7 @@ function buildTabs() {
     btn.addEventListener("click", () => selectTab(u.key));
     tabsEl.appendChild(btn);
   });
+  tabsEl.style.display = visibleUnits.length <= 1 ? "none" : "";
 }
 
 function selectTab(key) {
@@ -881,7 +892,7 @@ async function init() {
   try {
     await loadLiveData();
     buildTabs();
-    selectTab("all");
+    selectTab(VIEW ? VIEW.default : "all");
     const now = new Date();
     document.getElementById("dataSource").textContent =
       `구글시트 실시간 연동 · GS 시트 + 진행(계약)/사전(펀넬) 원장 기준 · 마지막 갱신 ${now.toLocaleString("ko-KR")}`;
