@@ -581,8 +581,9 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
     }
   });
 
-  rows.sort((a, b) => b.amt - a.amt);
-  const total = rows.reduce((s, r) => s + r.amt, 0);
+  const key = metric === "수주" ? "rev" : "amt";
+  rows.sort((a, b) => b[key] - a[key]);
+  const total = rows.reduce((s, r) => s + r[key], 0);
   return { rows, total };
 }
 
@@ -621,12 +622,13 @@ function renderProjectModal(subMonth) {
     ).join("")}</div>`;
   }
 
-  const showRev = metric === "수주";
+  const isWon = metric === "수주";
+  const amtLabel = isWon ? "당해 매출" : "금액";
   const body = document.getElementById("projModalBody");
   const tableHtml = rows.length === 0
     ? `<div class="modal-empty">해당하는 프로젝트가 없습니다.</div>`
     : `<table class="proj">
-        <thead><tr><th>프로젝트</th><th class="num">금액</th>${showRev ? '<th class="num">당해 매출금액</th>' : ''}</tr></thead>
+        <thead><tr><th>프로젝트</th><th class="num">${amtLabel}</th></tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
@@ -635,8 +637,7 @@ function renderProjectModal(subMonth) {
                 <div class="pmeta">${r.cust} · ${r.rep}${r.month ? ` · 계약월 ${formatYm(r.month)}` : ''}</div>
                 <span class="proj-badge ${r.cls}">${r.tag}</span>
               </td>
-              <td class="num pamt">${fmt(r.amt / 1e8, 1)}억</td>
-              ${showRev ? `<td class="num pamt">${fmt(r.rev / 1e8, 1)}억</td>` : ''}
+              <td class="num pamt">${fmt((isWon ? r.rev : r.amt) / 1e8, 1)}억</td>
             </tr>`).join("")}
         </tbody>
       </table>`;
