@@ -421,7 +421,7 @@ function buildPipelineList(grid, dataStart) {
     const months = [];
     for (let c = 22; c <= 33; c++) months.push(Number(r[c]) || 0);
     const prob = r[18] != null ? Math.round(Number(r[18]) * 100) + "%" : "";
-    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), Number(r[3]) || 0, prob, (r[19] || "").toString().trim(), ...months]);
+    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), Number(r[3]) || 0, prob, (r[19] || "").toString().trim(), ...months, Number(r[34]) || 0]); // 마지막 = AI열 매출 당해합계
   }
   return rows;
 }
@@ -558,23 +558,26 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
   PROJECTS_WON.forEach(p => {
     const [biz, name, cust, rep, month, amt, ...m] = p;
     if (!bizMatch(biz, bizFilter)) return;
+    const rev = m.reduce((s, v) => s + v, 0); // 당해 매출금액 = 해당 프로젝트의 1~12월 매출인식 합계
     if (metric === "수주") {
-      if (yms.includes(month)) rows.push({ name, cust, rep, amt, month, tag: "확정계약", cls: "won" });
+      if (yms.includes(month)) rows.push({ name, cust, rep, amt, rev, month, tag: "확정계약", cls: "won" });
     } else {
       const sum = nums.reduce((s, n) => s + m[n - 1], 0);
-      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, tag: "확정계약", cls: "won" });
+      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, rev, tag: "확정계약", cls: "won" });
     }
   });
 
   PROJECTS_PIPELINE.forEach(p => {
-    const [biz, name, cust, rep, month, applied, prob, status, ...m] = p;
+    const [biz, name, cust, rep, month, applied, prob, status, ...rest] = p;
+    const m = rest.slice(0, 12);
+    const rev = rest[12]; // 당해 매출금액 = AI열 매출 당해합계
     if (!bizMatch(biz, bizFilter)) return;
     if ((parseInt(prob, 10) || 0) < 50) return; // 수주확도(확률) 50% 미만 제외
     if (metric === "수주") {
-      if (yms.includes(month)) rows.push({ name, cust, rep, amt: applied, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
+      if (yms.includes(month)) rows.push({ name, cust, rep, amt: applied, rev, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
     } else {
       const sum = nums.reduce((s, n) => s + m[n - 1], 0);
-      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
+      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, rev, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
     }
   });
 
@@ -618,11 +621,12 @@ function renderProjectModal(subMonth) {
     ).join("")}</div>`;
   }
 
+  const showRev = metric === "수주";
   const body = document.getElementById("projModalBody");
   const tableHtml = rows.length === 0
     ? `<div class="modal-empty">해당하는 프로젝트가 없습니다.</div>`
     : `<table class="proj">
-        <thead><tr><th>프로젝트</th><th class="num">금액</th></tr></thead>
+        <thead><tr><th>프로젝트</th><th class="num">금액</th>${showRev ? '<th class="num">당해 매출금액</th>' : ''}</tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
@@ -632,6 +636,7 @@ function renderProjectModal(subMonth) {
                 <span class="proj-badge ${r.cls}">${r.tag}</span>
               </td>
               <td class="num pamt">${fmt(r.amt / 1e8, 1)}억</td>
+              ${showRev ? `<td class="num pamt">${fmt(r.rev / 1e8, 1)}억</td>` : ''}
             </tr>`).join("")}
         </tbody>
       </table>`;
