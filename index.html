@@ -776,16 +776,11 @@ const panelEl = document.getElementById("panel");
 // URL 파라미터(?unit=infra / ?unit=strategy)로 탭 구성을 좁혀서 사업부 전용 링크를 만들 수 있게 함.
 // 미지정(기본) = 전사 화면 그대로(탭 5개 전부).
 const VIEW_CONFIGS = {
-  infra: { keys: ["infra"], default: "infra", suffix: "_인프라사업부" },
-  strategy: { keys: ["strategybu", "fa", "strategy"], default: "strategybu", suffix: "_전략사업부" },
+  infra: { keys: ["infra"], default: "infra" },
+  strategy: { keys: ["strategybu", "fa", "strategy"], default: "strategybu" },
 };
 const viewParam = new URLSearchParams(location.search).get("unit");
 const VIEW = VIEW_CONFIGS[viewParam] || null;
-if (VIEW) {
-  document.title += VIEW.suffix;
-  const h1 = document.querySelector(".titleblock h1");
-  if (h1) h1.textContent += VIEW.suffix;
-}
 
 function buildTabs() {
   tabsEl.innerHTML = "";
@@ -798,7 +793,6 @@ function buildTabs() {
     btn.addEventListener("click", () => selectTab(u.key));
     tabsEl.appendChild(btn);
   });
-  tabsEl.style.display = visibleUnits.length <= 1 ? "none" : "";
 }
 
 function selectTab(key) {
