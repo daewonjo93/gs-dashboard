@@ -249,6 +249,8 @@
   /* ---------- Status strip ---------- */
   .status-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
   .status-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px; }
+  .status-chip.cmp-cum-drill { text-decoration: none; }
+  .status-chip.cmp-cum-drill:hover { color: inherit; border-color: var(--accent-2); }
   .status-chip .s-label { font-size: 11.5px; color: var(--ink-500); font-weight: 600; }
   .status-chip .s-val { font-family: var(--font-num); font-size: 20px; font-weight: 800; color: var(--ink-900); }
 
@@ -421,7 +423,8 @@ function buildPipelineList(grid, dataStart) {
     const months = [];
     for (let c = 22; c <= 33; c++) months.push(Number(r[c]) || 0);
     const prob = r[18] != null ? Math.round(Number(r[18]) * 100) + "%" : "";
-    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), Number(r[3]) || 0, prob, (r[19] || "").toString().trim(), ...months, Number(r[34]) || 0]); // 마지막 = AI열 매출 당해합계
+    const applied = stripSpaces(r[2]); // C열 = 수주확도 적용 여부("적용"/"-")
+    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), Number(r[3]) || 0, prob, (r[19] || "").toString().trim(), ...months, Number(r[34]) || 0, applied]); // 마지막 2개 = AI열 매출 당해합계, C열 적용여부
   }
   return rows;
 }
@@ -502,8 +505,8 @@ function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
       extra: { 재료비율, OPEX },
       monthly,
       status: [
-        { label: `수주잔고 매출 (${M}월 마감 기준)`, val: fmt(backlogRevenue / 1e8, 1), unit: "억원" },
-        { label: "펀넬 매출 (연간목표)", val: fmt(funnelTarget / 1e8, 1), unit: "억원" },
+        { label: `수주잔고 매출 (${M}월 마감 기준)`, val: fmt(backlogRevenue / 1e8, 1), unit: "억원", drill: "수주잔고" },
+        { label: "펀넬 매출 (연간목표)", val: fmt(funnelTarget / 1e8, 1), unit: "억원", drill: "펀넬매출" },
         { label: "연간 영업이익률 (예상)", val: fmt(opProfitRatio, 1), unit: "%" },
       ],
     };
@@ -548,8 +551,48 @@ function monthTargets(monthKey) {
 
 let modalCtx = null; // { unitKey, metric, monthKey }
 
+// 수주잔고/펀넬매출 팝업의 월별 필터 버튼용 개월 범위.
+function snapshotMonthRange(metric) {
+  if (metric === "수주잔고") {
+    const nums = []; for (let n = CLOSING_MONTH + 1; n <= 12; n++) nums.push(n);
+    return nums;
+  }
+  return Array.from({ length: 12 }, (_, i) => i + 1); // 펀넬매출: 1~12월
+}
+
 function computeRows(unitKey, metric, monthKey, subMonth) {
   const bizFilter = BIZ_MAP[unitKey];
+
+  if (metric === "수주잔고") {
+    const nums = subMonth ? [subMonth] : snapshotMonthRange(metric);
+    const rows = [];
+    PROJECTS_WON.forEach(p => {
+      const [biz, name, cust, rep, month, amt, ...m] = p;
+      if (!bizMatch(biz, bizFilter)) return;
+      const sum = nums.reduce((s, n) => s + m[n - 1], 0);
+      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, tag: "확정계약", cls: "won" });
+    });
+    rows.sort((a, b) => b.amt - a.amt);
+    return { rows, total: rows.reduce((s, r) => s + r.amt, 0) };
+  }
+
+  if (metric === "펀넬매출") {
+    // 월별(W:AH) 매출인식 스케줄이 일부 프로젝트에서 비어있어 AI열(당해합계)과 합이 안 맞음 —
+    // 월별 필터 없이 항상 AI열 당해합계 기준으로만 표시 (2026-08-18 확인).
+    const rows = [];
+    PROJECTS_PIPELINE.forEach(p => {
+      const [biz, name, cust, rep, month, applied, prob, status, ...rest] = p;
+      if (!bizMatch(biz, bizFilter)) return;
+      const revThisYear = rest[12];
+      const appliedFlag = rest[13];
+      if (appliedFlag !== "적용") return; // C열 수주확도 적용 필터
+      if (!revThisYear) return;
+      rows.push({ name, cust, rep, amt: revThisYear, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
+    });
+    rows.sort((a, b) => b.amt - a.amt);
+    return { rows, total: rows.reduce((s, r) => s + r.amt, 0) };
+  }
+
   const mt = monthTargets(monthKey);
   const nums = subMonth ? [subMonth] : mt.nums;
   const yms = subMonth ? [`2026${String(subMonth).padStart(2,"0")}`] : mt.yms;
@@ -605,20 +648,36 @@ function selectModalMonth(subMonth) {
 function renderProjectModal(subMonth) {
   const { unitLabel, metric, monthKey } = modalCtx;
   const { rows, total } = computeRows(modalCtx.unitKey, metric, monthKey, subMonth);
-  const mt = monthTargets(monthKey);
-  const monthLabel = MONTH_LABEL[monthKey] || `${mt.nums[0]}월`;
-
-  document.getElementById("projModalTitle").textContent =
-    `${unitLabel} · ${subMonth ? subMonth + "월" : monthLabel} ${metric} 프로젝트`;
-  document.getElementById("projModalSub").textContent =
-    metric === "수주" ? "해당 월 계약 체결(예정) 건 기준" : "해당 기간 매출 인식 금액 기준";
+  const isSnapshot = metric === "수주잔고" || metric === "펀넬매출";
 
   let filterHtml = "";
-  if (mt.nums.length > 1) {
-    const btns = [{ label: "전체", val: "" }, ...mt.nums.map(n => ({ label: `${n}월`, val: n }))];
-    filterHtml = `<div class="month-filter">${btns.map(b =>
-      `<button type="button" class="month-filter-btn ${(!subMonth && b.val==="") || subMonth===b.val ? 'active':''}" onclick="selectModalMonth(${b.val || 'null'})">${b.label}</button>`
-    ).join("")}</div>`;
+  if (isSnapshot) {
+    document.getElementById("projModalTitle").textContent = `${unitLabel} · ${subMonth ? subMonth + "월 " : ""}${metric} 프로젝트`;
+    document.getElementById("projModalSub").textContent =
+      metric === "수주잔고" ? `${CLOSING_MONTH}월 마감 기준, 잔여 월 매출인식 합계` : "수주확도 적용 프로젝트의 당해 매출 합계 기준";
+
+    // 펀넬매출: 월별 매출인식 스케줄이 일부 프로젝트에서 비어있어 필터 제공 안 함(항상 당해합계 기준).
+    if (metric === "수주잔고") {
+      const snapNums = snapshotMonthRange(metric);
+      const btns = [{ label: "전체", val: "" }, ...snapNums.map(n => ({ label: `${n}월`, val: n }))];
+      filterHtml = `<div class="month-filter">${btns.map(b =>
+        `<button type="button" class="month-filter-btn ${(!subMonth && b.val==="") || subMonth===b.val ? 'active':''}" onclick="selectModalMonth(${b.val || 'null'})">${b.label}</button>`
+      ).join("")}</div>`;
+    }
+  } else {
+    const mt = monthTargets(monthKey);
+    const monthLabel = MONTH_LABEL[monthKey] || `${mt.nums[0]}월`;
+    document.getElementById("projModalTitle").textContent =
+      `${unitLabel} · ${subMonth ? subMonth + "월" : monthLabel} ${metric} 프로젝트`;
+    document.getElementById("projModalSub").textContent =
+      metric === "수주" ? "해당 월 계약 체결(예정) 건 기준" : "해당 기간 매출 인식 금액 기준";
+
+    if (mt.nums.length > 1) {
+      const btns = [{ label: "전체", val: "" }, ...mt.nums.map(n => ({ label: `${n}월`, val: n }))];
+      filterHtml = `<div class="month-filter">${btns.map(b =>
+        `<button type="button" class="month-filter-btn ${(!subMonth && b.val==="") || subMonth===b.val ? 'active':''}" onclick="selectModalMonth(${b.val || 'null'})">${b.label}</button>`
+      ).join("")}</div>`;
+    }
   }
 
   const showRev = metric === "수주";
@@ -632,7 +691,7 @@ function renderProjectModal(subMonth) {
             <tr>
               <td>
                 <div class="pname">${r.name}</div>
-                <div class="pmeta">${r.cust} · ${r.rep}${r.month ? ` · 계약월 ${formatYm(r.month)}` : ''}</div>
+                <div class="pmeta">${r.cust} · ${r.rep}${(r.month && metric !== '수주') ? ` · ${r.cls === 'pipeline' ? '예상계약월' : '계약월'} ${formatYm(r.month)}` : ''}</div>
                 <span class="proj-badge ${r.cls}">${r.tag}</span>
               </td>
               <td class="num pamt">${fmt(r.amt / 1e8, 1)}억</td>
@@ -642,8 +701,9 @@ function renderProjectModal(subMonth) {
       </table>`;
   body.innerHTML = filterHtml + tableHtml;
 
+  const revTotal = showRev ? rows.reduce((s, r) => s + r.rev, 0) : null;
   document.getElementById("projModalFoot").innerHTML =
-    `<span>${rows.length}건</span><span>합계 <b>${fmt(total / 1e8, 1)}억</b></span>`;
+    `<span>${rows.length}건</span><span>합계 <b>${fmt(total / 1e8, 1)}억</b>${showRev ? ` · 당해 매출 합계 <b>${fmt(revTotal / 1e8, 1)}억</b>` : ''}</span>`;
 
   document.getElementById("projModalOverlay").classList.add("open");
 }
@@ -852,16 +912,16 @@ function renderPanel(u) {
   }).join("");
 
   const statusStrip = u.status ? `
-    <div class="panel-title"><h2>현황 지표</h2></div>
+    <div class="panel-title"><h2>현황 지표</h2><span class="hint">클릭 시 상세 현황 확인 가능</span></div>
     <div class="status-strip">
-      ${u.status.map(s => `<div class="status-chip"><span class="s-label">${s.label}</span><span class="s-val">${s.val}<span style="font-size:13px;font-weight:600;color:var(--ink-500)"> ${s.unit}</span></span></div>`).join("")}
+      ${u.status.map(s => `<div class="status-chip${s.drill ? ' cmp-cum-drill' : ''}"${s.drill ? ` onclick="openProjectModal('${u.key}','${s.drill}',null)"` : ''}><span class="s-label">${s.label}</span><span class="s-val">${s.val}<span style="font-size:13px;font-weight:600;color:var(--ink-500)"> ${s.unit}</span></span></div>`).join("")}
     </div>` : "";
 
   panelEl.innerHTML = `
     <div class="panel-title"><h2>핵심 지표</h2><span class="hint">1~7월 누계 · 연간 예상</span></div>
     <div class="kpi-row">${kpiCards}</div>
 
-    <div class="panel-title"><h2>계획 대비 실적 비교</h2><span class="hint">목표 대비</span></div>
+    <div class="panel-title"><h2>계획 대비 실적 비교</h2><span class="hint">목표 대비 · 누계/잔여 클릭 시 상세 현황 확인 가능</span></div>
     <div class="table-card">
       <div class="table-scroll">
         <table class="cmp">
