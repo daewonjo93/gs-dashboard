@@ -136,6 +136,9 @@
   nav.tabs button.active { background: var(--surface); color: var(--accent-ink); box-shadow: var(--shadow); }
   nav.tabs button:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
   nav.tabs button .unit-tag { font-size: 10.5px; font-weight: 700; opacity: 0.6; margin-left: 3px; }
+  nav.page-switch { margin-bottom: 10px; background: var(--surface-3); }
+  nav.page-switch button { font-size: 14px; }
+  nav.page-switch button.active { background: var(--accent-2); color: #FFFFFF; }
 
   /* ---------- Section headings ---------- */
   .panel-title { display: flex; align-items: baseline; gap: 10px; margin: 30px 0 12px; }
@@ -169,6 +172,10 @@
   .gauge svg { display: block; }
   .gauge-pct { font-family: var(--font-num); font-size: 13px; font-weight: 700; }
 
+  .kpi-stats { display: flex; flex-direction: row; flex-wrap: wrap; gap: 18px 20px; flex: 1; }
+  .stat-row { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; flex: 0 0 80px; }
+  .stat-row .l { color: var(--ink-500); font-size: 13.5px; font-weight: 600; }
+  .stat-row .v { font-family: var(--font-num); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; white-space: nowrap; }
   .kpi-foot { display: flex; gap: 14px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 13px; }
   .kpi-foot .item { display: flex; flex-direction: column; gap: 3px; }
   .kpi-foot .item .l { color: var(--ink-500); }
@@ -235,14 +242,50 @@
   table.proj { width: 100%; border-collapse: collapse; }
   table.proj th { background: var(--surface); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-500); font-weight: 700; text-align: left; padding: 12px 20px 6px; border-bottom: 1px solid var(--border); }
   table.proj th.num, table.proj td.num { text-align: right; }
+  table.proj th.status, table.proj td.status { text-align: right; white-space: nowrap; }
+  table.proj.exec-table { table-layout: fixed; }
+  table.proj.exec-table th:first-child, table.proj.exec-table td:first-child { width: 200px; }
+  table.proj.exec-table th.status, table.proj.exec-table td.status { width: 72px; }
+  table.proj.exec-table th.type, table.proj.exec-table td.type { width: 80px; text-align: left; white-space: nowrap; }
+  table.proj.exec-table th.num, table.proj.exec-table td.num { width: 72px; }
   table.proj td { padding: 9px 20px; border-bottom: 1px solid var(--border); font-size: 12.5px; vertical-align: top; }
   table.proj tr:last-child td { border-bottom: none; }
+  table.proj tfoot td { font-weight: 800; color: var(--ink-900); background: var(--surface-2); border-top: 2px solid var(--border-strong); border-bottom: none; }
+  tr.proj-clickable { cursor: pointer; }
+  tr.proj-clickable:hover td { background: var(--surface-2); }
+  tr.proj-clickable:hover .pname { color: var(--accent-2); }
+
+  /* ---------- 진행상황 편집 모달 ---------- */
+  .progress-form { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .progress-week { display: flex; flex-direction: column; gap: 6px; }
+  .progress-week label { font-size: 12px; font-weight: 700; color: var(--ink-500); }
+  .progress-week textarea {
+    font-family: var(--font-sans); font-size: 13px; color: var(--ink-900); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; resize: vertical; min-height: 44px;
+  }
+  .progress-week textarea:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: var(--accent-2); }
+  .progress-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
+  .progress-status { font-size: 12px; color: var(--ink-500); margin-right: auto; }
+  .progress-status.err { color: var(--bad); }
+  .progress-status.ok { color: var(--good); }
+  .btn-save {
+    appearance: none; border: none; background: var(--accent-2); color: #FFFFFF; font-family: var(--font-sans);
+    font-size: 13px; font-weight: 700; padding: 9px 18px; border-radius: 8px; cursor: pointer;
+  }
+  .btn-save:hover { opacity: 0.9; }
+  .btn-save:disabled { opacity: 0.5; cursor: default; }
+  .btn-cancel {
+    appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--ink-700); font-family: var(--font-sans);
+    font-size: 13px; font-weight: 700; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+  }
+  .btn-cancel:hover { border-color: var(--border-strong); }
   table.proj td.pname { font-weight: 700; color: var(--ink-900); }
   table.proj td.pmeta { color: var(--ink-500); font-size: 11.5px; margin-top: 2px; }
   table.proj td.pamt { font-family: var(--font-num); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-900); white-space: nowrap; }
   .proj-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; margin-top: 4px; white-space: nowrap; }
   .proj-badge.won { background: var(--good-soft); color: var(--good); }
   .proj-badge.pipeline { background: var(--warn-soft); color: var(--warn); }
+  .proj-badge.bad { background: var(--bad-soft); color: var(--bad); }
   .modal-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-500); background: var(--surface-2); }
   .modal-foot b { color: var(--ink-900); font-family: var(--font-num); font-size: 13px; }
 
@@ -276,6 +319,10 @@
     </div>
   </header>
 
+  <nav class="tabs page-switch" id="pageSwitch" role="tablist">
+    <button type="button" data-page="main" class="active">경영실적</button>
+    <button type="button" data-page="exec">당월 실행계획</button>
+  </nav>
   <nav class="tabs" id="tabs" role="tablist"></nav>
   <div id="panel"></div>
 
@@ -296,6 +343,19 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="progressModalOverlay">
+  <div class="modal-box" role="dialog" aria-modal="true" style="max-width: 520px;">
+    <div class="modal-head">
+      <div>
+        <h3 id="progressModalTitle">진행상황 입력</h3>
+        <div class="modal-sub" id="progressModalSub"></div>
+      </div>
+      <button class="modal-close" id="progressModalClose" type="button" aria-label="닫기">✕</button>
+    </div>
+    <div class="progress-form" id="progressModalBody"></div>
+  </div>
+</div>
+
 <script>
 const EOK = "억"; // 단위: 억원
 
@@ -303,6 +363,9 @@ const EOK = "억"; // 단위: 억원
 const SHEET_ID = "1a9aJUkhUGv4N_iyTF9zsuGdccNU14kDx"; // 2026-08-14: 피벗이 정상 작동하는 새 시트로 교체
 // 마감월(현재 몇 월까지의 누계인지). 다음 달로 갱신할 때 이 값만 바꾸면 됨.
 const CLOSING_MONTH = 7;
+// "월별 실행계획" 메뉴가 보는 달. 매주 사용자가 구글시트의 "[N]월 계획 및 현황_수주/매출" 탭 내용을
+// 최신 파일로 갈아끼워주면(탭 이름은 고정하지 않고 매월 새로 맞춤) 이 값도 함께 바꿔야 함.
+const EXEC_MONTH = 8;
 
 function gvizUrl(sheetName, range) {
   const params = new URLSearchParams({ tqx: "out:json", sheet: sheetName });
@@ -454,6 +517,97 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
   return s;
 }
 
+// ---------- 월별 실행계획 (주간 실적 리뷰 자료) ----------
+// "[N]월 계획 및 현황_수주"/"_매출" 시트: 사용자가 매주 로컬 엑셀 내용을 그대로 복붙해 갱신.
+// 합계행("영업부서" 열에 "합계")을 찾아 데이터 시작 위치를 얻는다 — 컬럼 구조는 두 시트가 서로 다름.
+function findExecOrdersDataStart(grid) {
+  for (let i = 0; i < grid.length; i++) {
+    if (stripSpaces(grid[i][4]) === "합계") return i + 1;
+  }
+  throw new Error("실행계획(수주) 시트 구조를 인식할 수 없습니다 (합계 행을 찾지 못함)");
+}
+function findExecRevenueDataStart(grid) {
+  for (let i = 0; i < grid.length; i++) {
+    if (stripSpaces(grid[i][5]) === "합계") return i + 1;
+  }
+  throw new Error("실행계획(매출) 시트 구조를 인식할 수 없습니다 (합계 행을 찾지 못함)");
+}
+
+// A계획여부 B프로젝트코드 C프로젝트명 D프로젝트유형 E영업부서 F영업대표 G매출처명 H계약일자 I계약시작일 J계약종료일
+// K[N]월수주계획 L[N]월수주실적 M GAP N계약여부 O~R 진행상황(1~4주차)
+function buildExecOrdersList(grid, dataStart) {
+  const rows = [];
+  for (let i = dataStart; i < grid.length; i++) {
+    const r = grid[i];
+    const biz = stripSpaces(r[4]) ? String(r[4]).trim() : "";
+    if (!biz) continue;
+    rows.push({
+      code: (r[1] || "").toString().trim(),
+      planType: (r[0] || "").toString().trim(),
+      name: (r[2] || "").toString().trim(), type: (r[3] || "").toString().trim(), biz,
+      rep: (r[5] || "").toString().trim(), cust: (r[6] || "").toString().trim(),
+      plan: Number(r[10]) || 0, actual: Number(r[11]) || 0, gap: Number(r[12]) || 0,
+      contractStatus: (r[13] || "").toString().trim(),
+      weekNotes: [14, 15, 16, 17].map(idx => (r[idx] || "").toString().trim()),
+    });
+  }
+  return rows;
+}
+// A계획여부 B상태 C프로젝트코드 D프로젝트명 E프로젝트유형 F영업부서 G영업대표 H매출처명 I계약일자 J계약시작일 K계약종료일
+// L계약금액 M[N]월매출계획 N매출실적 O잔여매출(ERP) P GAP Q발행여부 R이월여부 S~V 진행상황(1~4주차)
+function buildExecRevenueList(grid, dataStart) {
+  const rows = [];
+  for (let i = dataStart; i < grid.length; i++) {
+    const r = grid[i];
+    const biz = stripSpaces(r[5]) ? String(r[5]).trim() : "";
+    if (!biz) continue;
+    rows.push({
+      code: (r[2] || "").toString().trim(),
+      planType: (r[0] || "").toString().trim(),
+      name: (r[3] || "").toString().trim(), type: (r[4] || "").toString().trim(), biz,
+      rep: (r[6] || "").toString().trim(), cust: (r[7] || "").toString().trim(),
+      plan: Number(r[12]) || 0,
+      actual: r[13] != null ? Number(r[13]) : null,
+      erpRemain: r[14] != null ? Number(r[14]) : null,
+      gap: Number(r[15]) || 0, issueStatus: (r[16] || "").toString().trim(),
+      weekNotes: [18, 19, 20, 21].map(idx => (r[idx] || "").toString().trim()),
+    });
+  }
+  return rows;
+}
+
+let EXEC_ORDERS = [];
+let EXEC_REVENUE = [];
+
+function computeExecSummary(bizFilter) {
+  const orders = EXEC_ORDERS.filter(r => bizMatch(r.biz, bizFilter));
+  const oPlan = orders.reduce((s, r) => s + r.plan, 0);
+  const oActual = orders.reduce((s, r) => s + r.actual, 0);
+  const oCountPlan = orders.filter(r => r.plan > 0).length;
+  const oCountActual = orders.filter(r => r.actual > 0).length;
+
+  const revenue = EXEC_REVENUE.filter(r => bizMatch(r.biz, bizFilter));
+  const rPlan = revenue.reduce((s, r) => s + r.plan, 0);
+  const rActual = revenue.reduce((s, r) => s + (r.actual || 0), 0);
+  const rErp = revenue.reduce((s, r) => s + (r.erpRemain || 0), 0);
+  const rExpected = rActual + rErp;
+
+  return {
+    orders: {
+      plan: oPlan, actual: oActual, gap: oActual - oPlan,
+      rate: oPlan ? oActual / oPlan * 100 : null,
+      countPlan: oCountPlan, countActual: oCountActual, countGap: oCountActual - oCountPlan,
+      rows: orders,
+    },
+    revenue: {
+      plan: rPlan, actual: rActual, erp: rErp, expected: rExpected, gap: rActual - rPlan,
+      progress: rPlan ? rActual / rPlan * 100 : null,
+      rate: rPlan ? rExpected / rPlan * 100 : null,
+      rows: revenue,
+    },
+  };
+}
+
 function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
   const blockStarts = findGSBlockStarts(gsGrid);
   const M = CLOSING_MONTH;
@@ -499,7 +653,7 @@ function buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart) {
     };
 
     return {
-      key: meta.key, label: meta.label, tag: meta.tag,
+      key: meta.key, label: meta.label, tag: meta.tag, biz: meta.biz,
       kpi: { 수주, 매출, 영업이익 },
       extra: { 재료비율, OPEX },
       monthly,
@@ -517,16 +671,20 @@ let PROJECTS_PIPELINE = [];
 let UNITS = [];
 
 async function loadLiveData() {
-  const [gsGrid, wonGrid, pipeGrid] = await Promise.all([
+  const [gsGrid, wonGrid, pipeGrid, execOrdersGrid, execRevenueGrid] = await Promise.all([
     fetchGrid("GS"),
     fetchGrid("진행(계약)_리스트"), // range 지정 시 구글시트 헤더 자동인식 방식이 바뀌어 행 오프셋이 달라짐 — 전체 fetch 유지
     fetchGrid("사전(펀넬)_리스트", "A1:AY40"),
+    fetchGrid(`${EXEC_MONTH}월 계획 및 현황_수주`),
+    fetchGrid(`${EXEC_MONTH}월 계획 및 현황_매출`),
   ]);
   const wonDataStart = findWonDataStart(wonGrid);
   const pipeDataStart = findPipeDataStart(pipeGrid);
   PROJECTS_WON = buildWonList(wonGrid, wonDataStart);
   PROJECTS_PIPELINE = buildPipelineList(pipeGrid, pipeDataStart);
   UNITS = buildUnitData(gsGrid, wonGrid, wonDataStart, pipeGrid, pipeDataStart);
+  EXEC_ORDERS = buildExecOrdersList(execOrdersGrid, findExecOrdersDataStart(execOrdersGrid));
+  EXEC_REVENUE = buildExecRevenueList(execRevenueGrid, findExecRevenueDataStart(execRevenueGrid));
 }
 
 // ---------- 프로젝트 드릴다운 팝업 ----------
@@ -716,6 +874,87 @@ document.getElementById("projModalOverlay").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeProjectModal(); });
 
+// ---------- 진행상황 입력(구글시트 쓰기) ----------
+// Apps Script 웹앱 URL — 이 시트에 Extensions > Apps Script로 배포한 doPost 엔드포인트.
+const PROGRESS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwdNuwHLqaLf_9ENIiPWSH02m1-BA6qH18iwbBpKuDTYIQihwqpvTAegCZZ89TevBRyUg/exec";
+const WEEK_LABELS = ["1주차", "2주차", "3주차", "4주차"];
+let progressCtx = null; // { code, sheet, kind, startCol, codeCol }
+
+// 수주 시트: B열(2)=프로젝트코드, O열(15)부터 진행상황 4주차. 매출 시트: C열(3)=프로젝트코드, S열(19)부터.
+const PROGRESS_SHEET_CFG = {
+  orders: { list: () => EXEC_ORDERS, sheet: () => `${EXEC_MONTH}월 계획 및 현황_수주`, startCol: 15, codeCol: 2 },
+  revenue: { list: () => EXEC_REVENUE, sheet: () => `${EXEC_MONTH}월 계획 및 현황_매출`, startCol: 19, codeCol: 3 },
+};
+
+function openProgressModal(code, kind) {
+  kind = kind || "orders";
+  const cfg = PROGRESS_SHEET_CFG[kind];
+  const row = cfg.list().find(r => r.code === code);
+  if (!row) return;
+  progressCtx = { code, kind, sheet: cfg.sheet(), startCol: cfg.startCol, codeCol: cfg.codeCol };
+
+  document.getElementById("progressModalTitle").textContent = row.name;
+  document.getElementById("progressModalSub").textContent = `${row.cust} · ${row.rep}`;
+
+  const body = document.getElementById("progressModalBody");
+  body.innerHTML = WEEK_LABELS.map((label, i) => `
+    <div class="progress-week">
+      <label>${label}</label>
+      <textarea id="progWeek${i}" rows="2">${(row.weekNotes[i] || "").replace(/</g, "&lt;")}</textarea>
+    </div>`).join("") + `
+    <div class="progress-actions">
+      <span class="progress-status" id="progressStatus"></span>
+      <button type="button" class="btn-cancel" onclick="closeProgressModal()">취소</button>
+      <button type="button" class="btn-save" id="progressSaveBtn" onclick="saveProgress()">저장</button>
+    </div>`;
+
+  document.getElementById("progressModalOverlay").classList.add("open");
+}
+
+function closeProgressModal() {
+  document.getElementById("progressModalOverlay").classList.remove("open");
+  progressCtx = null;
+}
+document.getElementById("progressModalClose").addEventListener("click", closeProgressModal);
+document.getElementById("progressModalOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "progressModalOverlay") closeProgressModal();
+});
+
+async function saveProgress() {
+  if (!progressCtx) return;
+  const weeks = [0, 1, 2, 3].map(i => document.getElementById(`progWeek${i}`).value);
+  const statusEl = document.getElementById("progressStatus");
+  const btn = document.getElementById("progressSaveBtn");
+  btn.disabled = true;
+  statusEl.textContent = "저장 중…";
+  statusEl.className = "progress-status";
+  try {
+    const res = await fetch(PROGRESS_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // Apps Script 프리플라이트 회피용
+      body: JSON.stringify({
+        code: progressCtx.code, sheet: progressCtx.sheet, weeks,
+        startCol: progressCtx.startCol, codeCol: progressCtx.codeCol,
+      }),
+    });
+    const data = await res.json();
+    if (data.status !== "ok") throw new Error(data.message || "저장 실패");
+
+    const row = PROGRESS_SHEET_CFG[progressCtx.kind].list().find(r => r.code === progressCtx.code);
+    if (row) row.weekNotes = weeks;
+
+    statusEl.textContent = "저장됐습니다";
+    statusEl.className = "progress-status ok";
+    const u = UNITS.find(x => x.key === (tabsEl.querySelector("button.active")?.dataset.key || "all"));
+    if (u && currentPage === "exec") renderExecPanel(u);
+  } catch (err) {
+    statusEl.textContent = `저장 실패: ${err.message || err}`;
+    statusEl.className = "progress-status err";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // 배지 등급
 // 수주·매출: 시간 경과 대비 진행 속도 기준. 벤치마크 = 마감월/12 (예: 7월 마감 → 58.3%).
 //   누계 진행률(=누계÷연간목표)이 벤치마크보다 +5%p 넘게 앞서면 양호, ±5%p 이내면 보통, 그 아래면 주의.
@@ -767,7 +1006,7 @@ function gauge(pct, size, colorVar) {
       <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="7"
         stroke-linecap="round" stroke-dasharray="${dash} ${c-dash}"
         transform="rotate(-90 ${size/2} ${size/2})"/>
-      <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" class="gauge-pct" fill="${neg ? 'var(--bad)' : 'var(--ink-900)'}">${fmt(pct,0)}%</text>
+      <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" class="gauge-pct" style="font-size:${Math.round(size*0.2)}px" fill="${neg ? 'var(--bad)' : 'var(--ink-900)'}">${fmt(pct,0)}%</text>
     </svg>
   </div>`;
 }
@@ -854,12 +1093,22 @@ function buildTabs() {
   });
 }
 
+let currentPage = "main"; // "main" | "exec"
+
 function selectTab(key) {
   [...tabsEl.children].forEach(b => b.classList.toggle("active", b.dataset.key === key));
   const u = UNITS.find(x => x.key === key);
-  renderPanel(u);
+  if (currentPage === "exec") renderExecPanel(u); else renderPanel(u);
   window.scrollTo({ top: 0, behavior: "auto" });
 }
+
+function switchPage(page) {
+  currentPage = page;
+  document.querySelectorAll("#pageSwitch button").forEach(b => b.classList.toggle("active", b.dataset.page === page));
+  const activeKey = tabsEl.querySelector("button.active")?.dataset.key || (VIEW ? VIEW.default : "all");
+  selectTab(activeKey);
+}
+document.querySelectorAll("#pageSwitch button").forEach(b => b.addEventListener("click", () => switchPage(b.dataset.page)));
 
 function renderPanel(u) {
   const metricNames = Object.keys(u.kpi);
@@ -948,6 +1197,151 @@ function renderPanel(u) {
   // 처음 열었을 때 마지막 실적월(마감월)이 맨 왼쪽에 오도록 스크롤
   const closingCard = panelEl.querySelector(`.month-card[data-month="${CLOSING_MONTH}"]`);
   if (closingCard) closingCard.scrollIntoView({ behavior: "auto", block: "nearest", inline: "start" });
+}
+
+function gapText(v) {
+  return v === 0 ? "–" : `${v >= 0 ? '+' : ''}${fmt(v / 1e8, 1)}억`;
+}
+function amtText(v) {
+  return (v == null || v === 0) ? "–" : `${fmt(v / 1e8, 1)}억`;
+}
+function gapClass(v) { return v > 0 ? "up" : v < 0 ? "down" : "flat"; }
+function typeLabel(type) { return type === "유지보수" ? "유지보수" : (type ? "구축" : "–"); }
+function gapStyleAttr(v) {
+  if (v > 0) return ' style="color:var(--good)"';
+  if (v < 0) return ' style="color:var(--bad)"';
+  return "";
+}
+
+function contractBadge(status) {
+  const signed = status === "계약완료";
+  return `<span class="proj-badge ${signed ? 'won' : 'bad'}">${status || '–'}</span>`;
+}
+
+function execBadge(planType) {
+  return planType === "실행계획 外"
+    ? '<span class="proj-badge pipeline">실행계획外</span>'
+    : '<span class="proj-badge won">실행계획</span>';
+}
+
+function renderExecPanel(u) {
+  const sum = computeExecSummary(u.biz);
+  const o = sum.orders, r = sum.revenue;
+
+  const orderCard = `
+  <div class="kpi-card">
+    <div class="kpi-head"><div class="kpi-label">수주</div></div>
+    <div class="kpi-body">
+      ${gauge(o.rate === null ? 100 : o.rate, 104, "var(--accent-2)")}
+      <div class="kpi-stats">
+        <div class="stat-row"><span class="l">계획</span><span class="v flat">${amtText(o.plan)}</span></div>
+        <div class="stat-row"><span class="l">실적</span><span class="v ${o.actual < 0 ? 'down' : 'flat'}">${amtText(o.actual)}</span></div>
+        <div class="stat-row"><span class="l">GAP</span><span class="v ${gapClass(o.gap)}">${gapText(o.gap)}</span></div>
+      </div>
+    </div>
+  </div>`;
+
+  const revCard = `
+  <div class="kpi-card">
+    <div class="kpi-head"><div class="kpi-label">매출</div></div>
+    <div class="kpi-body">
+      ${gauge(r.progress === null ? 100 : r.progress, 104, "var(--accent-2)")}
+      <div class="kpi-stats">
+        <div class="stat-row"><span class="l">계획</span><span class="v flat">${amtText(r.plan)}</span></div>
+        <div class="stat-row"><span class="l">실적</span><span class="v ${r.actual < 0 ? 'down' : 'flat'}">${amtText(r.actual)}</span></div>
+        <div class="stat-row"><span class="l">잔여(ERP)</span><span class="v ${r.erp < 0 ? 'down' : 'flat'}">${fmt(r.erp / 1e8, 1)}억</span></div>
+        <div class="stat-row"><span class="l">예상 달성률</span><span class="v ${r.rate !== null && r.rate < 0 ? 'down' : 'flat'}">${r.rate === null ? '–' : fmt(r.rate, 0) + '%'}</span></div>
+      </div>
+    </div>
+  </div>`;
+
+  // 실행계획(계획 큰 순) 먼저, 그 다음 실행계획 外(실적 큰 순)
+  const orderRows = o.rows.slice().sort((a, b) => {
+    const aGrp = a.planType === "실행계획" ? 0 : 1;
+    const bGrp = b.planType === "실행계획" ? 0 : 1;
+    if (aGrp !== bGrp) return aGrp - bGrp;
+    return aGrp === 0 ? (b.plan - a.plan) : (b.actual - a.actual);
+  });
+  const orderTable = orderRows.length === 0 ? `<div class="modal-empty">해당 프로젝트가 없습니다.</div>` : `
+    <table class="proj exec-table">
+      <thead><tr><th>프로젝트</th><th class="type">유형</th><th class="status">계약여부</th><th class="num">계획</th><th class="num">실적</th><th class="num">GAP</th></tr></thead>
+      <tbody>
+        ${orderRows.map(row => {
+          const latestNote = row.weekNotes.slice().reverse().find(n => n);
+          return `
+          <tr class="proj-clickable" onclick="openProgressModal('${row.code}','orders')">
+            <td>
+              <div class="pname">${row.name}</div>
+              <div class="pmeta">${row.cust} · ${row.rep}${latestNote ? ` · ${latestNote}` : ''}</div>
+              ${execBadge(row.planType)}
+            </td>
+            <td class="type">${typeLabel(row.type)}</td>
+            <td class="status">${contractBadge(row.contractStatus)}</td>
+            <td class="num pamt">${amtText(row.plan)}</td>
+            <td class="num pamt">${amtText(row.actual)}</td>
+            <td class="num pamt"${gapStyleAttr(row.gap)}>${gapText(row.gap)}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3">합계</td>
+          <td class="num pamt">${amtText(o.plan)}</td>
+          <td class="num pamt">${amtText(o.actual)}</td>
+          <td class="num pamt"${gapStyleAttr(o.gap)}>${gapText(o.gap)}</td>
+        </tr>
+      </tfoot>
+    </table>`;
+
+  // 실적 있는 프로젝트(실적 큰 순) 먼저, 실적 없는 프로젝트는 계획 큰 순
+  const revRows = r.rows.slice().sort((a, b) => {
+    const aHas = a.actual != null && a.actual !== 0;
+    const bHas = b.actual != null && b.actual !== 0;
+    if (aHas !== bHas) return aHas ? -1 : 1;
+    return aHas ? (b.actual - a.actual) : (b.plan - a.plan);
+  });
+  const revTable = revRows.length === 0 ? `<div class="modal-empty">해당 프로젝트가 없습니다.</div>` : `
+    <table class="proj exec-table">
+      <thead><tr><th>프로젝트</th><th class="type">유형</th><th class="num">계획</th><th class="num">실적</th><th class="num">잔여(ERP)</th><th class="num">GAP</th></tr></thead>
+      <tbody>
+        ${revRows.map(row => {
+          const latestNote = row.weekNotes.slice().reverse().find(n => n);
+          return `
+          <tr class="proj-clickable" onclick="openProgressModal('${row.code}','revenue')">
+            <td>
+              <div class="pname">${row.name}</div>
+              <div class="pmeta">${row.cust} · ${row.rep}${latestNote ? ` · ${latestNote}` : ''}</div>
+              ${execBadge(row.planType)}
+            </td>
+            <td class="type">${typeLabel(row.type)}</td>
+            <td class="num pamt">${amtText(row.plan)}</td>
+            <td class="num pamt">${amtText(row.actual)}</td>
+            <td class="num pamt">${amtText(row.erpRemain)}</td>
+            <td class="num pamt"${gapStyleAttr(row.gap)}>${gapText(row.gap)}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">합계</td>
+          <td class="num pamt">${amtText(r.plan)}</td>
+          <td class="num pamt">${amtText(r.actual)}</td>
+          <td class="num pamt">${amtText(r.erp)}</td>
+          <td class="num pamt"${gapStyleAttr(r.gap)}>${gapText(r.gap)}</td>
+        </tr>
+      </tfoot>
+    </table>`;
+
+  panelEl.innerHTML = `
+    <div class="panel-title"><h2>${EXEC_MONTH}월 실행계획 대비 실적</h2><span class="hint">주간 실행계획 리뷰 기준</span></div>
+    <div class="kpi-row" style="grid-template-columns: repeat(2, 1fr);">${orderCard}${revCard}</div>
+
+    <div class="panel-title"><h2>실행계획 대비 수주 현황</h2><span class="hint">${o.rows.length}건</span></div>
+    <div class="table-card"><div class="table-scroll">${orderTable}</div></div>
+
+    <div class="panel-title"><h2>실행계획 대비 매출 현황</h2><span class="hint">${r.rows.length}건</span></div>
+    <div class="table-card"><div class="table-scroll">${revTable}</div></div>
+  `;
 }
 
 async function init() {
