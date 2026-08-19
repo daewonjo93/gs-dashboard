@@ -405,6 +405,15 @@ const OFFSETS = {
 
 function stripSpaces(v) { return (v == null ? "" : String(v)).replace(/\s+/g, ""); }
 
+// 시트 숫자 칸이 실수로 텍스트(쉼표 포함 "100,000,000" 등)로 입력된 경우에도 안전하게 파싱.
+// Number()는 쉼표 섞인 문자열을 NaN으로 처리해 조용히 0으로 사라지는 버그가 있었음(2026-08-19, 펀넬리스트 11월 매출 누락 사례).
+function toNum(v) {
+  if (v == null) return 0;
+  if (typeof v === "number") return v;
+  const n = Number(String(v).replace(/,/g, "").trim());
+  return isNaN(n) ? 0 : n;
+}
+
 // GS 시트에서 "수주" 라벨이 있는 행을 순서대로 찾아 4개 블록(전사/인프라/FA/전략) 시작행을 얻는다.
 // 절대 행 번호 대신 라벨로 찾는 이유: 시트에 행이 추가/삭제돼도 안전하게 동작하도록.
 function findGSBlockStarts(gsGrid) {
@@ -419,9 +428,9 @@ function findGSBlockStarts(gsGrid) {
 
 function extractGSRow(gsGrid, baseIdx, metricKey) {
   const row = gsGrid[baseIdx + OFFSETS[metricKey]] || [];
-  const target = Number(row[4]) || 0; // E열 = 연간계획
+  const target = toNum(row[4]); // E열 = 연간계획
   const months = [];
-  for (let m = 6; m <= 17; m++) months.push(Number(row[m]) || 0); // G~R = 1~12월
+  for (let m = 6; m <= 17; m++) months.push(toNum(row[m])); // G~R = 1~12월
   return { target, months };
 }
 
@@ -469,8 +478,8 @@ function buildWonList(grid, dataStart) {
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
     const months = [];
-    for (let c = 17; c <= 28; c++) months.push(Number(r[c]) || 0);
-    rows.push([biz, r[6], r[10], r[9], String(r[1] || "").trim(), Number(r[14]) || 0, ...months]);
+    for (let c = 17; c <= 28; c++) months.push(toNum(r[c]));
+    rows.push([biz, r[6], r[10], r[9], String(r[1] || "").trim(), toNum(r[14]), ...months]);
   }
   return rows;
 }
@@ -484,10 +493,10 @@ function buildPipelineList(grid, dataStart) {
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
     const months = [];
-    for (let c = 22; c <= 33; c++) months.push(Number(r[c]) || 0);
-    const prob = r[18] != null ? Math.round(Number(r[18]) * 100) + "%" : "";
+    for (let c = 22; c <= 33; c++) months.push(toNum(r[c]));
+    const prob = r[18] != null ? Math.round(toNum(r[18]) * 100) + "%" : "";
     const applied = stripSpaces(r[2]); // C열 = 수주확도 적용 여부("적용"/"-")
-    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), Number(r[3]) || 0, prob, (r[19] || "").toString().trim(), ...months, Number(r[34]) || 0, applied]); // 마지막 2개 = AI열 매출 당해합계, C열 적용여부
+    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), toNum(r[3]), prob, (r[19] || "").toString().trim(), ...months, toNum(r[34]), applied]); // 마지막 2개 = AI열 매출 당해합계, C열 적용여부
   }
   return rows;
 }
@@ -500,7 +509,7 @@ function sumBacklogRevenue(wonGrid, dataStart, bizFilter) {
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
     if (!bizMatch(biz, bizFilter)) continue;
-    for (let c = 17 + M; c <= 28; c++) s += Number(r[c]) || 0; // (마감월+1)월~12월 매출인식
+    for (let c = 17 + M; c <= 28; c++) s += toNum(r[c]); // (마감월+1)월~12월 매출인식
   }
   return s;
 }
@@ -513,7 +522,7 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
     if (!biz) continue;
     if (!bizMatch(biz, bizFilter)) continue;
     if (stripSpaces(r[2]) !== "적용") continue; // C = 수주확도 적용
-    s += Number(r[34]) || 0; // AI = 매출 당해합계
+    s += toNum(r[34]); // AI = 매출 당해합계
   }
   return s;
 }
@@ -547,7 +556,7 @@ function buildExecOrdersList(grid, dataStart) {
       planType: (r[0] || "").toString().trim(),
       name: (r[2] || "").toString().trim(), type: (r[3] || "").toString().trim(), biz,
       rep: (r[5] || "").toString().trim(), cust: (r[6] || "").toString().trim(),
-      plan: Number(r[10]) || 0, actual: Number(r[11]) || 0, gap: Number(r[12]) || 0,
+      plan: toNum(r[10]), actual: toNum(r[11]), gap: toNum(r[12]),
       contractStatus: (r[13] || "").toString().trim(),
       weekNotes: [14, 15, 16, 17].map(idx => (r[idx] || "").toString().trim()),
     });
@@ -567,10 +576,10 @@ function buildExecRevenueList(grid, dataStart) {
       planType: (r[0] || "").toString().trim(),
       name: (r[3] || "").toString().trim(), type: (r[4] || "").toString().trim(), biz,
       rep: (r[6] || "").toString().trim(), cust: (r[7] || "").toString().trim(),
-      plan: Number(r[12]) || 0,
-      actual: r[13] != null ? Number(r[13]) : null,
-      erpRemain: r[14] != null ? Number(r[14]) : null,
-      gap: Number(r[15]) || 0, issueStatus: (r[16] || "").toString().trim(),
+      plan: toNum(r[12]),
+      actual: r[13] != null ? toNum(r[13]) : null,
+      erpRemain: r[14] != null ? toNum(r[14]) : null,
+      gap: toNum(r[15]), issueStatus: (r[16] || "").toString().trim(),
       weekNotes: [18, 19, 20, 21].map(idx => (r[idx] || "").toString().trim()),
     });
   }
