@@ -244,9 +244,10 @@
   table.proj th.num, table.proj td.num { text-align: right; }
   table.proj th.status, table.proj td.status { text-align: right; white-space: nowrap; }
   table.proj.exec-table { table-layout: fixed; }
-  table.proj.exec-table th:first-child, table.proj.exec-table td:first-child { width: 200px; }
+  table.proj.exec-table th:first-child, table.proj.exec-table td:first-child { width: 260px; }
   table.proj.exec-table th.status, table.proj.exec-table td.status { width: 72px; }
-  table.proj.exec-table th.type, table.proj.exec-table td.type { width: 80px; text-align: left; white-space: nowrap; }
+  table.proj.exec-table th.type, table.proj.exec-table td.type { width: 56px; text-align: left; white-space: nowrap; }
+  table.proj.exec-table th.note, table.proj.exec-table td.note { width: 180px; text-align: left; white-space: normal; color: var(--ink-500); font-size: 12px; }
   table.proj.exec-table th.num, table.proj.exec-table td.num { width: 72px; }
   table.proj td { padding: 9px 20px; border-bottom: 1px solid var(--border); font-size: 12.5px; vertical-align: top; }
   table.proj tr:last-child td { border-bottom: none; }
@@ -1264,7 +1265,7 @@ function renderExecPanel(u) {
   });
   const orderTable = orderRows.length === 0 ? `<div class="modal-empty">해당 프로젝트가 없습니다.</div>` : `
     <table class="proj exec-table">
-      <thead><tr><th>프로젝트</th><th class="type">유형</th><th class="status">계약여부</th><th class="num">계획</th><th class="num">실적</th><th class="num">GAP</th></tr></thead>
+      <thead><tr><th>프로젝트</th><th class="type">유형</th><th class="status">계약여부</th><th class="num">계획</th><th class="num">실적</th><th class="num">GAP</th><th class="note">진행상황</th></tr></thead>
       <tbody>
         ${orderRows.map(row => {
           const latestNote = row.weekNotes.slice().reverse().find(n => n);
@@ -1272,7 +1273,7 @@ function renderExecPanel(u) {
           <tr class="proj-clickable" onclick="openProgressModal('${row.code}','orders')">
             <td>
               <div class="pname">${row.name}</div>
-              <div class="pmeta">${row.cust} · ${row.rep}${latestNote ? ` · ${latestNote}` : ''}</div>
+              <div class="pmeta">${row.cust} · ${row.rep}</div>
               ${execBadge(row.planType)}
             </td>
             <td class="type">${typeLabel(row.type)}</td>
@@ -1280,6 +1281,7 @@ function renderExecPanel(u) {
             <td class="num pamt">${amtText(row.plan)}</td>
             <td class="num pamt">${amtText(row.actual)}</td>
             <td class="num pamt"${gapStyleAttr(row.gap)}>${gapText(row.gap)}</td>
+            <td class="note">${latestNote || '–'}</td>
           </tr>`;
         }).join("")}
       </tbody>
@@ -1289,6 +1291,7 @@ function renderExecPanel(u) {
           <td class="num pamt">${amtText(o.plan)}</td>
           <td class="num pamt">${amtText(o.actual)}</td>
           <td class="num pamt"${gapStyleAttr(o.gap)}>${gapText(o.gap)}</td>
+          <td></td>
         </tr>
       </tfoot>
     </table>`;
@@ -1302,7 +1305,7 @@ function renderExecPanel(u) {
   });
   const revTable = revRows.length === 0 ? `<div class="modal-empty">해당 프로젝트가 없습니다.</div>` : `
     <table class="proj exec-table">
-      <thead><tr><th>프로젝트</th><th class="type">유형</th><th class="num">계획</th><th class="num">실적</th><th class="num">잔여(ERP)</th><th class="num">GAP</th></tr></thead>
+      <thead><tr><th>프로젝트</th><th class="type">유형</th><th class="num">계획</th><th class="num">실적</th><th class="num">잔여(ERP)</th><th class="num">GAP</th><th class="note">진행상황</th></tr></thead>
       <tbody>
         ${revRows.map(row => {
           const latestNote = row.weekNotes.slice().reverse().find(n => n);
@@ -1310,7 +1313,7 @@ function renderExecPanel(u) {
           <tr class="proj-clickable" onclick="openProgressModal('${row.code}','revenue')">
             <td>
               <div class="pname">${row.name}</div>
-              <div class="pmeta">${row.cust} · ${row.rep}${latestNote ? ` · ${latestNote}` : ''}</div>
+              <div class="pmeta">${row.cust} · ${row.rep}</div>
               ${execBadge(row.planType)}
             </td>
             <td class="type">${typeLabel(row.type)}</td>
@@ -1318,6 +1321,7 @@ function renderExecPanel(u) {
             <td class="num pamt">${amtText(row.actual)}</td>
             <td class="num pamt">${amtText(row.erpRemain)}</td>
             <td class="num pamt"${gapStyleAttr(row.gap)}>${gapText(row.gap)}</td>
+            <td class="note">${latestNote || '–'}</td>
           </tr>`;
         }).join("")}
       </tbody>
@@ -1328,6 +1332,7 @@ function renderExecPanel(u) {
           <td class="num pamt">${amtText(r.actual)}</td>
           <td class="num pamt">${amtText(r.erp)}</td>
           <td class="num pamt"${gapStyleAttr(r.gap)}>${gapText(r.gap)}</td>
+          <td></td>
         </tr>
       </tfoot>
     </table>`;
@@ -1336,7 +1341,7 @@ function renderExecPanel(u) {
     <div class="panel-title"><h2>${EXEC_MONTH}월 실행계획 대비 실적</h2><span class="hint">주간 실행계획 리뷰 기준</span></div>
     <div class="kpi-row" style="grid-template-columns: repeat(2, 1fr);">${orderCard}${revCard}</div>
 
-    <div class="panel-title"><h2>실행계획 대비 수주 현황</h2><span class="hint">${o.rows.length}건</span></div>
+    <div class="panel-title"><h2>실행계획 대비 수주 현황</h2><span class="hint">${o.rows.filter(x => x.contractStatus === "계약완료").length}건</span></div>
     <div class="table-card"><div class="table-scroll">${orderTable}</div></div>
 
     <div class="panel-title"><h2>실행계획 대비 매출 현황</h2><span class="hint">${r.rows.length}건</span></div>
