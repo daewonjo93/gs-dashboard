@@ -296,6 +296,13 @@
   .week-field { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
   .week-field b { display: block; font-size: 11px; font-weight: 700; color: var(--ink-500); margin-bottom: 3px; }
   .week-field p { margin: 0; font-size: 12.5px; color: var(--ink-700); white-space: pre-line; }
+  .week-card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .week-card-btn {
+    appearance: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-500); font-family: var(--font-sans);
+    font-size: 11.5px; font-weight: 700; padding: 4px 12px; border-radius: 8px; cursor: pointer;
+  }
+  .week-card-btn:hover { border-color: var(--border-strong); color: var(--ink-700); }
+  .week-card-btn.danger:hover { border-color: var(--bad); color: var(--bad); }
   @media (max-width: 860px) { .week-form-grid { grid-template-columns: 1fr; } }
   .progress-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
   .progress-status { font-size: 12px; color: var(--ink-500); margin-right: auto; }
@@ -445,6 +452,11 @@ function toNum(v) {
   if (typeof v === "number") return v;
   const n = Number(String(v).replace(/,/g, "").trim());
   return isNaN(n) ? 0 : n;
+}
+
+// 수정 폼에 기존 값을 되채울 때 따옴표/꺾쇠가 HTML을 깨뜨리지 않도록.
+function escAttr(v) {
+  return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // GS 시트에서 "수주" 라벨이 있는 행을 순서대로 찾아 4개 블록(전사/인프라/FA/전략) 시작행을 얻는다.
@@ -1455,28 +1467,63 @@ function buildWeeklyReportRows(raw) {
     timing: (r[9] || "").toString().trim(), prob: Math.round(toNum(r[10]) * 100), // K열은 0~1 사이 소수를 %서식으로 표시(0.5=50%) — 100으로 곱해서 실제 % 숫자로 변환
     status: (r[11] || "").toString().trim(), issue: (r[12] || "").toString().trim(),
     solution: (r[13] || "").toString().trim(),
+    id: (r[14] || "").toString().trim(), // O열: 수정/삭제 대상 지정용 고유ID. 신규 등록 행부터 채워짐(기존 행은 비어있어 수정/삭제 버튼 미표시).
   }));
 }
 
-function weeklyReportCard(r) {
+function weeklyReportCard(r, opts = {}) {
+  const badge = opts.showBadge && r.unit ? `<span class="week-badge">${WEEKLY_UNIT_LABEL[r.unit] || r.unit}</span>` : "";
+  const actions = opts.editable && r.id ? `
+    <div class="week-card-actions">
+      <button type="button" class="week-card-btn" onclick="startEditWeeklyReport('${r.id}')">수정</button>
+      <button type="button" class="week-card-btn danger" onclick="deleteWeeklyReport('${r.id}')">삭제</button>
+    </div>` : "";
   return `
   <div class="week-card">
     <div class="week-card-head">
-      <div class="week-pname">${r.unit ? `<span class="week-badge">${WEEKLY_UNIT_LABEL[r.unit] || r.unit}</span>` : ""}${r.project || "(프로젝트명 없음)"}</div>
+      <div class="week-pname">${badge}${r.project || "(프로젝트명 없음)"}</div>
       <span class="week-range">${fmtMD(r.start)} ~ ${fmtMD(r.end)}</span>
     </div>
     <div class="week-meta">${r.contact}${r.type ? ` · ${r.type}` : ''}${r.scale ? ` · ${r.scale}` : ''}${r.prob ? ` · 수주확도 ${r.prob}%` : ''}</div>
     ${r.status ? `<div class="week-field"><b>진행 현황</b><p>${r.status.replace(/\n/g, '<br>')}</p></div>` : ''}
     ${r.issue ? `<div class="week-field"><b>이슈 및 리스크</b><p>${r.issue.replace(/\n/g, '<br>')}</p></div>` : ''}
     ${r.solution ? `<div class="week-field"><b>해결책 및 대안</b><p>${r.solution.replace(/\n/g, '<br>')}</p></div>` : ''}
+    ${actions}
+  </div>`;
+}
+
+// 카드 목록 안에서 수정 버튼을 누른 항목만 이 폼으로 교체되어 바로 그 자리에서 편집.
+function weeklyEditCard(r) {
+  return `
+  <div class="week-card week-form-card">
+    <div class="week-form-grid">
+      <div class="progress-week"><label>프로젝트</label><input type="text" id="we_project" value="${escAttr(r.project)}"></div>
+      <div class="progress-week"><label>고객사 / 담당자</label><input type="text" id="we_contact" value="${escAttr(r.contact)}"></div>
+      <div class="progress-week"><label>프로젝트 유형</label><input type="text" id="we_type" value="${escAttr(r.type)}"></div>
+      <div class="progress-week"><label>사업 규모(금액)</label><input type="text" id="we_scale" value="${escAttr(r.scale)}"></div>
+      <div class="progress-week"><label>시행 시기</label><input type="text" id="we_timing" value="${escAttr(r.timing)}"></div>
+      <div class="progress-week"><label>수주 확도(%)</label><input type="number" id="we_prob" min="0" max="100" step="5" value="${escAttr(r.prob || 0)}"></div>
+    </div>
+    <div class="progress-week"><label>주요 일정 및 진행 현황</label><textarea id="we_status" rows="3">${escAttr(r.status)}</textarea></div>
+    <div class="progress-week"><label>이슈 및 리스크</label><textarea id="we_issue" rows="2">${escAttr(r.issue)}</textarea></div>
+    <div class="progress-week"><label>해결책 및 대안</label><textarea id="we_solution" rows="2">${escAttr(r.solution)}</textarea></div>
+    <div class="progress-actions">
+      <span class="progress-status" id="weeklyEditStatus"></span>
+      <button type="button" class="btn-cancel" onclick="cancelEditWeeklyReport()">취소</button>
+      <button type="button" class="btn-save" id="weeklyEditSaveBtn" onclick="saveEditedWeeklyReport('${r.id}')">저장</button>
+    </div>
   </div>`;
 }
 
 // 주차별 필터 — 리스트가 길어지니 한 번에 다 보여주지 않고 주차를 선택해서 볼 수 있게 함.
 let weeklyCurrentList = []; // 현재 패널에 로드된 전체 리스트(필터 전)
+let weeklyCurrentWeekKey = null; // 현재 선택된 주차 필터
+let weeklyListOpts = {}; // { showBadge, editable } — 전사/전략사업부 합산뷰는 읽기 전용, 개별 사업부 탭만 수정/삭제 가능
+let weeklyEditingId = null; // 현재 인라인 수정 폼으로 펼쳐진 항목의 id
 function weekKeyOf(r) { return `${r.year}-${r.month}-${r.week}`; }
 
-function renderWeeklyListSection(list, selectedKey) {
+function renderWeeklyListSection(list, selectedKey, opts = {}) {
+  weeklyCurrentWeekKey = selectedKey;
   const weekOptions = [];
   const seen = new Set();
   list.forEach(r => {
@@ -1496,7 +1543,7 @@ function renderWeeklyListSection(list, selectedKey) {
   const filtered = selectedKey ? list.filter(r => weekKeyOf(r) === selectedKey) : list;
   const listHtml = filtered.length === 0
     ? `<div class="modal-empty">등록된 보고가 없습니다.</div>`
-    : `<div class="week-list">${filtered.map(weeklyReportCard).join("")}</div>`;
+    : `<div class="week-list">${filtered.map(r => (opts.editable && r.id && r.id === weeklyEditingId) ? weeklyEditCard(r) : weeklyReportCard(r, opts)).join("")}</div>`;
   return filterHtml + listHtml;
 }
 
@@ -1506,13 +1553,26 @@ function scrollWeekFilter(dir) {
 }
 
 function filterWeeklyList(weekKey) {
-  document.getElementById("weeklyListContainer").innerHTML = renderWeeklyListSection(weeklyCurrentList, weekKey);
+  document.getElementById("weeklyListContainer").innerHTML = renderWeeklyListSection(weeklyCurrentList, weekKey, weeklyListOpts);
+}
+
+function startEditWeeklyReport(id) {
+  weeklyEditingId = id;
+  filterWeeklyList(weeklyCurrentWeekKey);
+}
+
+function cancelEditWeeklyReport() {
+  weeklyEditingId = null;
+  filterWeeklyList(weeklyCurrentWeekKey);
 }
 
 let weeklyRenderToken = 0; // 비동기 렌더 경합 방지: 페이지/탭을 빠르게 전환하면 먼저 시작한 fetch가 나중에 끝나 화면을 덮어쓸 수 있어 토큰으로 최신 호출만 반영.
+let weeklyCurrentUnit = null; // 수정/삭제 저장 후 재렌더링할 때 다시 넘겨줄 현재 탭
 
 async function renderWeeklyPanel(u) {
   const myToken = ++weeklyRenderToken;
+  weeklyCurrentUnit = u;
+  weeklyEditingId = null;
   panelEl.innerHTML = `<div class="panel-title"><h2>주간업무보고</h2><span class="hint">불러오는 중…</span></div>`;
 
   const combinedKeys = WEEKLY_COMBINED[u.key];
@@ -1522,10 +1582,11 @@ async function renderWeeklyPanel(u) {
     const allRows = results.flatMap((r, i) => r.valid ? buildWeeklyReportRows(r.rows).map(row => ({ ...row, unit: combinedKeys[i] })) : []);
     allRows.sort((a, b) => (b.start || 0) - (a.start || 0));
     weeklyCurrentList = allRows;
+    weeklyListOpts = { showBadge: true, editable: false }; // 전사/전략사업부 합산뷰는 여러 시트가 섞여있어 읽기 전용
     const defaultKey = allRows.length > 0 ? weekKeyOf(allRows[0]) : null;
     panelEl.innerHTML = `
-      <div class="panel-title"><h2>주간업무보고</h2><span class="hint">${allRows.length}건 · 각 사업부 탭에서 새 보고 작성 가능</span></div>
-      <div id="weeklyListContainer">${renderWeeklyListSection(allRows, defaultKey)}</div>
+      <div class="panel-title"><h2>주간업무보고</h2><span class="hint">${allRows.length}건 · 각 사업부 탭에서 새 보고 작성/수정 가능</span></div>
+      <div id="weeklyListContainer">${renderWeeklyListSection(allRows, defaultKey, weeklyListOpts)}</div>
     `;
     return;
   }
@@ -1543,9 +1604,10 @@ async function renderWeeklyPanel(u) {
       <div class="modal-empty">"${sheetName}" 시트가 아직 준비되지 않았습니다. 구글시트에 해당 탭을 먼저 만들어주세요.</div>`;
     return;
   }
-  const list = buildWeeklyReportRows(rows).sort((a, b) => (b.start || 0) - (a.start || 0));
+  const list = buildWeeklyReportRows(rows).map(row => ({ ...row, unit: u.key })).sort((a, b) => (b.start || 0) - (a.start || 0));
 
   weeklyCurrentList = list;
+  weeklyListOpts = { showBadge: false, editable: true };
   const defaultKey = list.length > 0 ? weekKeyOf(list[0]) : null;
 
   panelEl.innerHTML = `
@@ -1554,7 +1616,7 @@ async function renderWeeklyPanel(u) {
       <button type="button" class="btn-save panel-title-action" id="weeklyToggleBtn" onclick="toggleWeeklyForm('${u.key}')">+ 새 보고 작성</button>
     </div>
     <div id="weeklyFormInline"></div>
-    <div id="weeklyListContainer">${renderWeeklyListSection(list, defaultKey)}</div>
+    <div id="weeklyListContainer">${renderWeeklyListSection(list, defaultKey, weeklyListOpts)}</div>
   `;
 }
 
@@ -1637,6 +1699,75 @@ async function submitWeeklyReport(unitKey) {
     statusEl.textContent = `등록 실패: ${err.message || err}`;
     statusEl.className = "progress-status err";
     btn.disabled = false;
+  }
+}
+
+async function saveEditedWeeklyReport(id) {
+  const r = weeklyCurrentList.find(x => x.id === id);
+  if (!r) return;
+  const sheetName = WEEKLY_REPORT_SHEETS[r.unit];
+  const statusEl = document.getElementById("weeklyEditStatus");
+  const btn = document.getElementById("weeklyEditSaveBtn");
+  const project = document.getElementById("we_project").value.trim();
+  if (!project) {
+    statusEl.textContent = "프로젝트명을 입력해주세요";
+    statusEl.className = "progress-status err";
+    return;
+  }
+  // 주차/기간은 편집 대상이 아님 — 처음 등록됐을 때의 주차를 그대로 유지
+  const report = {
+    year: r.year, month: r.month, week: r.week,
+    startDate: isoDate(r.start), endDate: isoDate(r.end),
+    project,
+    contact: document.getElementById("we_contact").value.trim(),
+    type: document.getElementById("we_type").value.trim(),
+    scale: document.getElementById("we_scale").value.trim(),
+    timing: document.getElementById("we_timing").value.trim(),
+    prob: Number(document.getElementById("we_prob").value) || 0,
+    status: document.getElementById("we_status").value.trim(),
+    issue: document.getElementById("we_issue").value.trim(),
+    solution: document.getElementById("we_solution").value.trim(),
+  };
+  btn.disabled = true;
+  statusEl.textContent = "저장 중…";
+  statusEl.className = "progress-status";
+  try {
+    const res = await fetch(PROGRESS_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "update", sheet: sheetName, id, report }),
+    });
+    const data = await res.json();
+    if (data.status !== "ok") throw new Error(data.message || "저장 실패");
+
+    delete WEEKLY_CACHE[sheetName];
+    weeklyEditingId = null;
+    if (weeklyCurrentUnit) await renderWeeklyPanel(weeklyCurrentUnit);
+  } catch (err) {
+    statusEl.textContent = `저장 실패: ${err.message || err}`;
+    statusEl.className = "progress-status err";
+    btn.disabled = false;
+  }
+}
+
+async function deleteWeeklyReport(id) {
+  const r = weeklyCurrentList.find(x => x.id === id);
+  if (!r) return;
+  if (!confirm(`"${r.project || "이 보고"}" 항목을 삭제하시겠습니까?`)) return;
+  const sheetName = WEEKLY_REPORT_SHEETS[r.unit];
+  try {
+    const res = await fetch(PROGRESS_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "delete", sheet: sheetName, id }),
+    });
+    const data = await res.json();
+    if (data.status !== "ok") throw new Error(data.message || "삭제 실패");
+
+    delete WEEKLY_CACHE[sheetName];
+    if (weeklyCurrentUnit) await renderWeeklyPanel(weeklyCurrentUnit);
+  } catch (err) {
+    alert(`삭제 실패: ${err.message || err}`);
   }
 }
 
