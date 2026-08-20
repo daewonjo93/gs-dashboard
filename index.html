@@ -144,7 +144,8 @@
   .panel-title { display: flex; align-items: baseline; gap: 10px; margin: 30px 0 12px; }
   .panel-title h2 { font-size: 15px; font-weight: 700; margin: 0; color: var(--ink-900); }
   .panel-title .hint { font-size: 12px; color: var(--ink-500); }
-  .panel-title::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .panel-title::after { content: ""; flex: 1; height: 1px; background: var(--border); order: 1; }
+  .panel-title-action { order: 2; }
 
   /* ---------- KPI hero cards ---------- */
   .kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -236,6 +237,17 @@
   .modal-body { overflow-y: auto; padding: 0; }
   .modal-empty { padding: 32px 20px; text-align: center; color: var(--ink-500); font-size: 13px; }
   .month-filter { display: flex; gap: 6px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  .week-filter-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .week-filter-scroll { display: flex; gap: 6px; flex: 1; overflow-x: auto; scroll-behavior: smooth; scrollbar-width: none; }
+  .week-filter-scroll::-webkit-scrollbar { display: none; }
+  .week-filter-scroll .month-filter-btn { flex-shrink: 0; white-space: nowrap; }
+  .week-filter-arrow {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; appearance: none;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink-700);
+    box-shadow: var(--shadow); cursor: pointer; font-size: 15px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .week-filter-arrow:hover { border-color: var(--border-strong); color: var(--accent-2); }
   .month-filter-btn { appearance: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-500); font-family: var(--font-sans); font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; }
   .month-filter-btn:hover { border-color: var(--border-strong); color: var(--ink-900); }
   .month-filter-btn.active { background: var(--accent-2); border-color: var(--accent-2); color: #FFFFFF; }
@@ -265,6 +277,26 @@
     border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; resize: vertical; min-height: 44px;
   }
   .progress-week textarea:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: var(--accent-2); }
+  .progress-week input[type="text"], .progress-week input[type="number"] {
+    font-family: var(--font-sans); font-size: 13px; color: var(--ink-900); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  .progress-week input:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: var(--accent-2); }
+
+  /* ---------- 주간업무보고 ---------- */
+  .week-form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .week-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .week-list { display: flex; flex-direction: column; gap: 12px; }
+  .week-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px 18px; }
+  .week-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .week-badge { font-size: 11px; font-weight: 700; color: var(--accent-2); background: var(--accent-2-soft); padding: 3px 9px; border-radius: 999px; margin-right: 8px; }
+  .week-range { font-size: 11.5px; color: var(--ink-500); font-family: var(--font-num); flex-shrink: 0; }
+  .week-pname { font-size: 14.5px; font-weight: 700; color: var(--ink-900); }
+  .week-meta { font-size: 12px; color: var(--ink-500); margin-top: 2px; }
+  .week-field { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .week-field b { display: block; font-size: 11px; font-weight: 700; color: var(--ink-500); margin-bottom: 3px; }
+  .week-field p { margin: 0; font-size: 12.5px; color: var(--ink-700); white-space: pre-line; }
+  @media (max-width: 860px) { .week-form-grid { grid-template-columns: 1fr; } }
   .progress-actions { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
   .progress-status { font-size: 12px; color: var(--ink-500); margin-right: auto; }
   .progress-status.err { color: var(--bad); }
@@ -323,6 +355,7 @@
   <nav class="tabs page-switch" id="pageSwitch" role="tablist">
     <button type="button" data-page="main" class="active">경영실적</button>
     <button type="button" data-page="exec">당월 실행계획</button>
+    <button type="button" data-page="weekly">주간업무보고</button>
   </nav>
   <nav class="tabs" id="tabs" role="tablist"></nav>
   <div id="panel"></div>
@@ -1108,7 +1141,9 @@ let currentPage = "main"; // "main" | "exec"
 function selectTab(key) {
   [...tabsEl.children].forEach(b => b.classList.toggle("active", b.dataset.key === key));
   const u = UNITS.find(x => x.key === key);
-  if (currentPage === "exec") renderExecPanel(u); else renderPanel(u);
+  if (currentPage === "exec") renderExecPanel(u);
+  else if (currentPage === "weekly") renderWeeklyPanel(u);
+  else renderPanel(u);
   window.scrollTo({ top: 0, behavior: "auto" });
 }
 
@@ -1356,6 +1391,253 @@ function renderExecPanel(u) {
     <div class="panel-title"><h2>실행계획 대비 매출 현황</h2><span class="hint">${r.rows.length}건</span></div>
     <div class="table-card"><div class="table-scroll">${revTable}</div></div>
   `;
+}
+
+// ---------- 주간업무보고 (사업부별 시트에 신규 행 누적 입력) ----------
+// 사업부 key -> 실제 구글시트 탭 이름. FA/전략 시트는 아직 없음 — 생기면 여기 한 줄만 추가하면 됨.
+const WEEKLY_REPORT_SHEETS = {
+  infra: "주간업무보고_인프라",
+  fa: "주간업무보고_FA",
+  strategy: "주간업무보고_전략",
+};
+const WEEKLY_COMBINED = { all: ["infra", "fa", "strategy"], strategybu: ["fa", "strategy"] };
+const WEEKLY_UNIT_LABEL = { infra: "인프라사업부", fa: "FA사업팀", strategy: "전략·대외사업팀" }; // 전사/전략사업부처럼 여러 시트를 합쳐 보여줄 때 어느 팀 보고인지 표시용
+const WEEKLY_CACHE = {}; // { [sheetName]: { valid: bool, rows: [...] } }
+
+function parseGvizDate(v) {
+  if (typeof v !== "string") return null;
+  const m = v.match(/^Date\((\d+),(\d+),(\d+)\)$/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2], +m[3]); // gviz month는 이미 0-indexed
+}
+function fmtMD(d) { return d ? `${d.getMonth() + 1}/${d.getDate()}` : "–"; }
+
+// 주간업무보고는 "다음 주에 할 업무"를 전주 중(화~일)에 미리 작성하는 방식이라,
+// 월요일 당일 작성분만 그 주 자체로 남기고, 화~일에 작성하면 다음 주 월~금 기준으로 저장한다.
+// 주차 = 그 주 월요일 날짜를 7로 올림나눔(월 시작 기준 몇 번째 주).
+function getWeekInfo(now) {
+  const day = now.getDay(); // 0=일 ... 6=토
+  const diffToMonday = (day + 6) % 7;
+  const thisMonday = new Date(now); thisMonday.setDate(now.getDate() - diffToMonday); thisMonday.setHours(0, 0, 0, 0);
+  const monday = new Date(thisMonday);
+  if (day !== 1) monday.setDate(thisMonday.getDate() + 7); // 월요일이 아니면 다음 주로
+  const friday = new Date(monday); friday.setDate(monday.getDate() + 4);
+  return { year: monday.getFullYear(), month: monday.getMonth() + 1, week: Math.ceil(monday.getDate() / 7), monday, friday };
+}
+function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+
+// 시트가 존재하는지(A1 라벨이 "연도"인지)까지 확인 — 없는 시트명을 gviz에 물으면 조용히 GS 시트를 반환하므로 반드시 검증 필요.
+async function fetchWeeklySheetRows(sheetName) {
+  if (WEEKLY_CACHE[sheetName]) return WEEKLY_CACHE[sheetName];
+  try {
+    const res = await fetch(gvizUrl(sheetName));
+    const text = await res.text();
+    const jsonStr = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+    const obj = JSON.parse(jsonStr);
+    const valid = obj.table.cols && obj.table.cols[0] && stripSpaces(obj.table.cols[0].label) === "연도";
+    const rows = valid ? obj.table.rows.map(r => (r.c || []).map(cell => (cell ? cell.v : null))) : [];
+    const result = { valid, rows };
+    WEEKLY_CACHE[sheetName] = result;
+    return result;
+  } catch (err) {
+    const result = { valid: false, rows: [] };
+    WEEKLY_CACHE[sheetName] = result;
+    return result;
+  }
+}
+
+function buildWeeklyReportRows(raw) {
+  return raw.map(r => ({
+    year: toNum(r[0]), month: toNum(r[1]), week: toNum(r[2]),
+    start: parseGvizDate(r[3]), end: parseGvizDate(r[4]),
+    project: (r[5] || "").toString().trim(), contact: (r[6] || "").toString().trim(),
+    type: (r[7] || "").toString().trim(), scale: (r[8] || "").toString().trim(),
+    timing: (r[9] || "").toString().trim(), prob: Math.round(toNum(r[10]) * 100), // K열은 0~1 사이 소수를 %서식으로 표시(0.5=50%) — 100으로 곱해서 실제 % 숫자로 변환
+    status: (r[11] || "").toString().trim(), issue: (r[12] || "").toString().trim(),
+    solution: (r[13] || "").toString().trim(),
+  }));
+}
+
+function weeklyReportCard(r) {
+  return `
+  <div class="week-card">
+    <div class="week-card-head">
+      <div class="week-pname">${r.unit ? `<span class="week-badge">${WEEKLY_UNIT_LABEL[r.unit] || r.unit}</span>` : ""}${r.project || "(프로젝트명 없음)"}</div>
+      <span class="week-range">${fmtMD(r.start)} ~ ${fmtMD(r.end)}</span>
+    </div>
+    <div class="week-meta">${r.contact}${r.type ? ` · ${r.type}` : ''}${r.scale ? ` · ${r.scale}` : ''}${r.prob ? ` · 수주확도 ${r.prob}%` : ''}</div>
+    ${r.status ? `<div class="week-field"><b>진행 현황</b><p>${r.status.replace(/\n/g, '<br>')}</p></div>` : ''}
+    ${r.issue ? `<div class="week-field"><b>이슈 및 리스크</b><p>${r.issue.replace(/\n/g, '<br>')}</p></div>` : ''}
+    ${r.solution ? `<div class="week-field"><b>해결책 및 대안</b><p>${r.solution.replace(/\n/g, '<br>')}</p></div>` : ''}
+  </div>`;
+}
+
+// 주차별 필터 — 리스트가 길어지니 한 번에 다 보여주지 않고 주차를 선택해서 볼 수 있게 함.
+let weeklyCurrentList = []; // 현재 패널에 로드된 전체 리스트(필터 전)
+function weekKeyOf(r) { return `${r.year}-${r.month}-${r.week}`; }
+
+function renderWeeklyListSection(list, selectedKey) {
+  const weekOptions = [];
+  const seen = new Set();
+  list.forEach(r => {
+    const k = weekKeyOf(r);
+    if (!seen.has(k)) { seen.add(k); weekOptions.push({ key: k, year: r.year, month: r.month, week: r.week }); }
+  }); // list가 이미 최신순 정렬돼있어 weekOptions도 자연히 최신 주차부터 나열됨
+
+  const filterHtml = weekOptions.length > 1 ? `
+    <div class="week-filter-wrap">
+      <button type="button" class="week-filter-arrow" onclick="scrollWeekFilter(-1)" aria-label="이전 주차">‹</button>
+      <div class="week-filter-scroll" id="weekFilterScroll">
+        ${weekOptions.map(w => `<button type="button" class="month-filter-btn ${w.key === selectedKey ? 'active' : ''}" onclick="filterWeeklyList('${w.key}')">${String(w.year).slice(2)}년 ${w.month}월 ${w.week}주차</button>`).join("")}
+      </div>
+      <button type="button" class="week-filter-arrow" onclick="scrollWeekFilter(1)" aria-label="다음 주차">›</button>
+    </div>` : "";
+
+  const filtered = selectedKey ? list.filter(r => weekKeyOf(r) === selectedKey) : list;
+  const listHtml = filtered.length === 0
+    ? `<div class="modal-empty">등록된 보고가 없습니다.</div>`
+    : `<div class="week-list">${filtered.map(weeklyReportCard).join("")}</div>`;
+  return filterHtml + listHtml;
+}
+
+function scrollWeekFilter(dir) {
+  const el = document.getElementById("weekFilterScroll");
+  if (el) el.scrollBy({ left: dir * 240, behavior: "smooth" });
+}
+
+function filterWeeklyList(weekKey) {
+  document.getElementById("weeklyListContainer").innerHTML = renderWeeklyListSection(weeklyCurrentList, weekKey);
+}
+
+let weeklyRenderToken = 0; // 비동기 렌더 경합 방지: 페이지/탭을 빠르게 전환하면 먼저 시작한 fetch가 나중에 끝나 화면을 덮어쓸 수 있어 토큰으로 최신 호출만 반영.
+
+async function renderWeeklyPanel(u) {
+  const myToken = ++weeklyRenderToken;
+  panelEl.innerHTML = `<div class="panel-title"><h2>주간업무보고</h2><span class="hint">불러오는 중…</span></div>`;
+
+  const combinedKeys = WEEKLY_COMBINED[u.key];
+  if (combinedKeys) {
+    const results = await Promise.all(combinedKeys.map(k => WEEKLY_REPORT_SHEETS[k] ? fetchWeeklySheetRows(WEEKLY_REPORT_SHEETS[k]) : { valid: false, rows: [] }));
+    if (myToken !== weeklyRenderToken) return;
+    const allRows = results.flatMap((r, i) => r.valid ? buildWeeklyReportRows(r.rows).map(row => ({ ...row, unit: combinedKeys[i] })) : []);
+    allRows.sort((a, b) => (b.start || 0) - (a.start || 0));
+    weeklyCurrentList = allRows;
+    const defaultKey = allRows.length > 0 ? weekKeyOf(allRows[0]) : null;
+    panelEl.innerHTML = `
+      <div class="panel-title"><h2>주간업무보고</h2><span class="hint">${allRows.length}건 · 각 사업부 탭에서 새 보고 작성 가능</span></div>
+      <div id="weeklyListContainer">${renderWeeklyListSection(allRows, defaultKey)}</div>
+    `;
+    return;
+  }
+
+  const sheetName = WEEKLY_REPORT_SHEETS[u.key];
+  if (!sheetName) {
+    panelEl.innerHTML = `<div class="panel-title"><h2>주간업무보고</h2></div><div class="modal-empty">이 화면에서는 지원하지 않는 사업부입니다.</div>`;
+    return;
+  }
+  const { valid, rows } = await fetchWeeklySheetRows(sheetName);
+  if (myToken !== weeklyRenderToken) return;
+  if (!valid) {
+    panelEl.innerHTML = `
+      <div class="panel-title"><h2>주간업무보고</h2></div>
+      <div class="modal-empty">"${sheetName}" 시트가 아직 준비되지 않았습니다. 구글시트에 해당 탭을 먼저 만들어주세요.</div>`;
+    return;
+  }
+  const list = buildWeeklyReportRows(rows).sort((a, b) => (b.start || 0) - (a.start || 0));
+
+  weeklyCurrentList = list;
+  const defaultKey = list.length > 0 ? weekKeyOf(list[0]) : null;
+
+  panelEl.innerHTML = `
+    <div class="panel-title">
+      <h2>주간업무보고</h2><span class="hint">${list.length}건</span>
+      <button type="button" class="btn-save panel-title-action" id="weeklyToggleBtn" onclick="toggleWeeklyForm('${u.key}')">+ 새 보고 작성</button>
+    </div>
+    <div id="weeklyFormInline"></div>
+    <div id="weeklyListContainer">${renderWeeklyListSection(list, defaultKey)}</div>
+  `;
+}
+
+// 팝업이 아니라 목록 위에 바로 펼쳐지는 방식 — 아래 등록된 보고 내용을 보면서 복사/참고해 작성할 수 있도록.
+function toggleWeeklyForm(unitKey) {
+  const container = document.getElementById("weeklyFormInline");
+  const btn = document.getElementById("weeklyToggleBtn");
+  if (container.innerHTML.trim()) {
+    container.innerHTML = "";
+    btn.textContent = "+ 새 보고 작성";
+    return;
+  }
+  const wk = getWeekInfo(new Date());
+  container.innerHTML = `
+    <div class="week-form-card">
+      <div class="progress-week"><label style="font-size:12.5px;">${wk.year}년 ${wk.month}월 ${wk.week}주차 (${fmtMD(wk.monday)}~${fmtMD(wk.friday)}) 기준으로 저장됩니다</label></div>
+      <div class="week-form-grid">
+        <div class="progress-week"><label>프로젝트</label><input type="text" id="wf_project"></div>
+        <div class="progress-week"><label>고객사 / 담당자</label><input type="text" id="wf_contact"></div>
+        <div class="progress-week"><label>프로젝트 유형</label><input type="text" id="wf_type"></div>
+        <div class="progress-week"><label>사업 규모(금액)</label><input type="text" id="wf_scale"></div>
+        <div class="progress-week"><label>시행 시기</label><input type="text" id="wf_timing"></div>
+        <div class="progress-week"><label>수주 확도(%)</label><input type="number" id="wf_prob" min="0" max="100" step="5"></div>
+      </div>
+      <div class="progress-week"><label>주요 일정 및 진행 현황</label><textarea id="wf_status" rows="3"></textarea></div>
+      <div class="progress-week"><label>이슈 및 리스크</label><textarea id="wf_issue" rows="2"></textarea></div>
+      <div class="progress-week"><label>해결책 및 대안</label><textarea id="wf_solution" rows="2"></textarea></div>
+      <div class="progress-actions">
+        <span class="progress-status" id="weeklyFormStatus"></span>
+        <button type="button" class="btn-cancel" onclick="toggleWeeklyForm('${unitKey}')">취소</button>
+        <button type="button" class="btn-save" id="weeklySubmitBtn" onclick="submitWeeklyReport('${unitKey}')">등록</button>
+      </div>
+    </div>`;
+  btn.textContent = "접기";
+  container.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function submitWeeklyReport(unitKey) {
+  const sheetName = WEEKLY_REPORT_SHEETS[unitKey];
+  const statusEl = document.getElementById("weeklyFormStatus");
+  const btn = document.getElementById("weeklySubmitBtn");
+  const project = document.getElementById("wf_project").value.trim();
+  if (!project) {
+    statusEl.textContent = "프로젝트명을 입력해주세요";
+    statusEl.className = "progress-status err";
+    return;
+  }
+  const wk = getWeekInfo(new Date());
+  const report = {
+    year: wk.year, month: wk.month, week: wk.week,
+    startDate: isoDate(wk.monday), endDate: isoDate(wk.friday),
+    project,
+    contact: document.getElementById("wf_contact").value.trim(),
+    type: document.getElementById("wf_type").value.trim(),
+    scale: document.getElementById("wf_scale").value.trim(),
+    timing: document.getElementById("wf_timing").value.trim(),
+    prob: Number(document.getElementById("wf_prob").value) || 0,
+    status: document.getElementById("wf_status").value.trim(),
+    issue: document.getElementById("wf_issue").value.trim(),
+    solution: document.getElementById("wf_solution").value.trim(),
+  };
+  btn.disabled = true;
+  statusEl.textContent = "등록 중…";
+  statusEl.className = "progress-status";
+  try {
+    const res = await fetch(PROGRESS_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "append", sheet: sheetName, report }),
+    });
+    const data = await res.json();
+    if (data.status !== "ok") throw new Error(data.message || "등록 실패");
+
+    delete WEEKLY_CACHE[sheetName]; // 새로 등록됐으니 다음 조회 때 새로 불러오게 캐시 무효화
+    statusEl.textContent = "등록됐습니다";
+    statusEl.className = "progress-status ok";
+    const u = UNITS.find(x => x.key === unitKey);
+    if (u) await renderWeeklyPanel(u); // 재렌더링되면서 입력 폼도 자동으로 접힌 상태로 초기화됨
+  } catch (err) {
+    statusEl.textContent = `등록 실패: ${err.message || err}`;
+    statusEl.className = "progress-status err";
+    btn.disabled = false;
+  }
 }
 
 async function init() {
