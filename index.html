@@ -369,6 +369,7 @@
     <button type="button" data-page="main" class="active">경영실적</button>
     <button type="button" data-page="exec">당월 실행계획</button>
     <button type="button" data-page="weekly">주간업무보고</button>
+    <button type="button" data-page="sim">펀넬 시뮬레이션</button>
   </nav>
   <nav class="tabs" id="tabs" role="tablist"></nav>
   <div id="panel"></div>
@@ -943,6 +944,112 @@ document.getElementById("projModalOverlay").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeProjectModal(); });
 
+// ---------- 펀넬 시뮬레이션 ----------
+// 경영실적 화면의 연간 추정 수주/매출/영업이익(GS 시트 기준)은 이미 예상수주확률 50% 이상인 펀넬을 포함한 값.
+// 여기서 기준을 50%보다 높이면(70/90/100%) "50%~기준 미만" 구간 프로젝트가 빠지는 효과를 시뮬레이션한다 —
+// 즉 50% 선택 시에는 경영실적 화면과 완전히 동일한 값이 나와야 하고, 기준이 높아질수록 그만큼 줄어드는 방향.
+// 실제 KPI 카드/계획대비실적비교표에는 영향 없음(시뮬레이션 전용, GS 원본 값은 그대로 둠).
+const SIM_THRESHOLDS = [50, 70, 90, 100];
+let simThreshold = 50;
+
+// 50%~기준 미만 구간(경영실적엔 포함돼 있지만 기준을 높이면 빠지는 프로젝트)의 제외분(원 단위) —
+// 수주는 수주확도 적용금액, 매출은 당해합계, 영업이익은 매출 감소분에서 그 프로젝트 재료비율만큼 뺀 매출총이익 감소 추정치.
+function computeFunnelSimulation(thresholdPct) {
+  return BIZ_UNITS.map(meta => {
+    let removeOrder = 0, removeRevenue = 0, removeProfit = 0, count = 0;
+    PROJECTS_PIPELINE.forEach(p => {
+      const [biz, name, cust, rep, month, applied, prob, status, ...rest] = p;
+      if (!bizMatch(biz, meta.biz)) return;
+      const revThisYear = rest[12];
+      const matRatio = rest[14];
+      const probNum = parseInt(prob, 10) || 0;
+      if (probNum < 50 || probNum >= thresholdPct) return; // 경영실적에 이미 없거나(50%미만) 새 기준도 만족(그대로 유지)하면 제외 대상 아님
+      if (!revThisYear) return;
+      removeOrder += applied;
+      removeRevenue += revThisYear;
+      removeProfit += revThisYear * (1 - (matRatio || 0));
+      count++;
+    });
+    return { key: meta.key, removeOrder, removeRevenue, removeProfit, count };
+  });
+}
+
+function selectSimThreshold(pct) {
+  simThreshold = pct;
+  renderSimPanel();
+}
+
+function renderSimPanel() {
+  const sim = computeFunnelSimulation(simThreshold);
+  const simMap = Object.fromEntries(sim.map(r => [r.key, r]));
+
+  const btnsHtml = SIM_THRESHOLDS.map(p =>
+    `<button type="button" class="month-filter-btn ${p === simThreshold ? 'active' : ''}" onclick="selectSimThreshold(${p})">${p}%</button>`
+  ).join("");
+
+  // 사업부별로 먼저 다 계산해두고, 표는 지표(행) × 사업부(열)로 뒤집어서 그림.
+  const cols = BIZ_UNITS.map(meta => {
+    const u = UNITS.find(x => x.key === meta.key);
+    const rm = simMap[meta.key];
+    if (!u || !rm) return null;
+    const baseRevenue = u.kpi.매출.annual; // 억
+    const baseMatCost = baseRevenue * (u.extra.재료비율.annual / 100); // 억
+    const removeRevenue = rm.removeRevenue / 1e8;
+    const removeMatCost = (rm.removeRevenue - rm.removeProfit) / 1e8; // 제외분의 재료비 = 매출 감소분 - 매출총이익 감소분
+    const simRevenue = baseRevenue - removeRevenue;
+    const simMatCost = baseMatCost - removeMatCost;
+    const simMatRatio = simRevenue > 0 ? (simMatCost / simRevenue * 100) : 0;
+    const matRatioDeltaP = simMatRatio - u.extra.재료비율.annual;
+    const simProfit = u.kpi.영업이익.annual - rm.removeProfit / 1e8;
+    const baseProfitRatio = baseRevenue ? (u.kpi.영업이익.annual / baseRevenue * 100) : 0;
+    const simProfitRatio = simRevenue ? (simProfit / simRevenue * 100) : 0;
+    return {
+      label: meta.label,
+      order: { val: u.kpi.수주.annual - rm.removeOrder / 1e8, removeEok: rm.removeOrder / 1e8 },
+      revenue: { val: simRevenue, removeEok: removeRevenue },
+      profit: { val: simProfit, removeEok: rm.removeProfit / 1e8 },
+      matRatio: { val: simMatRatio, deltaP: matRatioDeltaP, invert: true },
+      profitRatio: { val: simProfitRatio, deltaP: simProfitRatio - baseProfitRatio, invert: false },
+    };
+  }).filter(Boolean);
+
+  function amtCell(entry) {
+    // 델타 줄은 값이 없어도 항상 자리를 차지하게(visibility:hidden) 해서 50% 기준 선택 시에도 표 높이가 안 흔들리게 함.
+    const show = entry.removeEok > 0.05;
+    const minus = `<div style="font-size:11px;font-weight:700;color:var(--bad);margin-top:2px;${show ? '' : 'visibility:hidden;'}">-${fmt(entry.removeEok, 1)}억</div>`;
+    return `<td class="num strong${entry.val < 0 ? ' neg' : ''}">${fmt(entry.val, 1)}억${minus}</td>`;
+  }
+  function pctCell(entry) {
+    const d = entry.deltaP;
+    const goodDirection = entry.invert ? d < 0 : d > 0; // 재료비율은 낮을수록, 영업이익율은 높을수록 좋음
+    const show = Math.abs(d) > 0.05;
+    const deltaHtml = `<div style="font-size:11px;font-weight:700;color:${goodDirection ? 'var(--good)' : 'var(--bad)'};margin-top:2px;${show ? '' : 'visibility:hidden;'}">${d > 0 ? '+' : ''}${fmt(d, 1)}%p</div>`;
+    return `<td class="num strong${entry.val < 0 ? ' neg' : ''}">${fmt(entry.val, 1)}%${deltaHtml}</td>`;
+  }
+
+  const headHtml = `<th>지표</th>${cols.map(c => `<th class="num">${c.label}</th>`).join("")}`;
+  const rowsHtml = `
+    <tr><td class="metric">수주</td>${cols.map(c => amtCell(c.order)).join("")}</tr>
+    <tr><td class="metric">매출</td>${cols.map(c => amtCell(c.revenue)).join("")}</tr>
+    <tr><td class="metric">영업이익</td>${cols.map(c => amtCell(c.profit)).join("")}</tr>
+    <tr><td class="metric">재료비율</td>${cols.map(c => pctCell(c.matRatio)).join("")}</tr>
+    <tr><td class="metric">영업이익율</td>${cols.map(c => pctCell(c.profitRatio)).join("")}</tr>
+  `;
+
+  panelEl.innerHTML = `
+    <div class="panel-title"><h2>펀넬 시뮬레이션</h2></div>
+    <div class="table-card" style="padding:18px 20px 20px;">
+      <div class="month-filter" style="padding:0 0 16px;border-bottom:none;">${btnsHtml}</div>
+      <div class="table-scroll">
+        <table class="cmp">
+          <thead><tr>${headHtml}</tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 // ---------- 진행상황 입력(구글시트 쓰기) ----------
 // Apps Script 웹앱 URL — 이 시트에 Extensions > Apps Script로 배포한 doPost 엔드포인트.
 const PROGRESS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwdNuwHLqaLf_9ENIiPWSH02m1-BA6qH18iwbBpKuDTYIQihwqpvTAegCZZ89TevBRyUg/exec";
@@ -1150,6 +1257,12 @@ const VIEW_CONFIGS = {
 const viewParam = new URLSearchParams(location.search).get("unit");
 const VIEW = VIEW_CONFIGS[viewParam] || null;
 
+// 펀넬 시뮬레이션은 사업부 전용 링크(?unit=...)에는 안 보이고 메인 URL(전사용)에서만 노출.
+if (VIEW) {
+  const simBtn = document.querySelector('#pageSwitch button[data-page="sim"]');
+  if (simBtn) simBtn.remove();
+}
+
 function buildTabs() {
   tabsEl.innerHTML = "";
   const visibleUnits = VIEW ? UNITS.filter(u => VIEW.keys.includes(u.key)) : UNITS;
@@ -1177,6 +1290,16 @@ function selectTab(key) {
 function switchPage(page) {
   currentPage = page;
   document.querySelectorAll("#pageSwitch button").forEach(b => b.classList.toggle("active", b.dataset.page === page));
+
+  // 시뮬레이션 화면은 사업부 탭 없이 전사/인프라/FA/전략·대외/전략사업부를 한 화면에 같이 보여줌.
+  if (page === "sim") {
+    tabsEl.style.display = "none";
+    renderSimPanel();
+    window.scrollTo({ top: 0, behavior: "auto" });
+    return;
+  }
+  tabsEl.style.display = "";
+
   const activeKey = tabsEl.querySelector("button.active")?.dataset.key || (VIEW ? VIEW.default : "all");
   selectTab(activeKey);
 }
