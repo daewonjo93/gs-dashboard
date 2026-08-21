@@ -86,6 +86,7 @@
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+  html { overflow-y: scroll; } /* 세로 스크롤바 자리를 항상 확보 — 펀넬 시뮬레이션처럼 스크롤이 없는 짧은 페이지로 전환될 때 스크롤바가 사라지면서 본문 폭이 흔들리는 걸 방지 */
   body {
     background: var(--bg);
     color: var(--ink-900);
@@ -1367,7 +1368,7 @@ function renderPanel(u) {
     <div class="panel-title"><h2>핵심 지표</h2><span class="hint">${CLOSING_MONTH}월 누계 · 연간 예상</span></div>
     <div class="kpi-row">${kpiCards}</div>
 
-    <div class="panel-title"><h2>계획 대비 실적 비교</h2><span class="hint">계획 대비 · 누계/잔여 클릭 시 상세 현황 확인 가능</span></div>
+    <div class="panel-title"><h2>계획 대비 실적 비교</h2><span class="hint">경영계획 대비 · 누계/잔여 클릭 시 상세 현황 확인 가능</span></div>
     <div class="table-card">
       <div class="table-scroll">
         <table class="cmp">
@@ -1386,8 +1387,8 @@ function renderPanel(u) {
       </div>
     </div>
 
-    <div class="panel-title"><h2>월별 전망</h2><span class="hint">1~${CLOSING_MONTH}월 실적 · ${CLOSING_MONTH+1}월 예상 · ${CLOSING_MONTH+2}~12월 계획 · 옆으로 스크롤해서 전체 12개월 확인 (수주/매출 클릭 시 상세 현황 확인 가능)</span></div>
-    <div class="month-grid">${monthCards}</div>
+    <div class="panel-title"><h2>월별 전망</h2><span class="hint">1~${CLOSING_MONTH}월 실적 · ${CLOSING_MONTH+1}월 예상 · ${CLOSING_MONTH+2}~12월 계획 (수주/매출 클릭 시 상세 현황 확인 가능)</span></div>
+    <div class="month-grid" id="monthGrid">${monthCards}</div>
 
     ${statusStrip}
   `;
