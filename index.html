@@ -411,17 +411,18 @@
 const EOK = "억"; // 단위: 억원
 
 // ---------- 구글시트 실시간 연동 ----------
-const SHEET_ID = "1a9aJUkhUGv4N_iyTF9zsuGdccNU14kDx"; // 2026-08-14: 피벗이 정상 작동하는 새 시트로 교체
 // 마감월(현재 몇 월까지의 누계인지). 다음 달로 갱신할 때 이 값만 바꾸면 됨.
 const CLOSING_MONTH = 7;
 // "월별 실행계획" 메뉴가 보는 달. 매주 사용자가 구글시트의 "[N]월 계획 및 현황_수주/매출" 탭 내용을
 // 최신 파일로 갈아끼워주면(탭 이름은 고정하지 않고 매월 새로 맞춤) 이 값도 함께 바꿔야 함.
 const EXEC_MONTH = 8;
 
+// 구글시트를 브라우저가 직접 열람(gviz)하지 않고 Apps Script를 거쳐서 읽음 — 시트 ID가 클라이언트 코드에 노출되지 않게
+// 하기 위함(2026-08-21, 시트 비공개 전환과 함께 적용). Apps Script의 doGet이 gviz와 동일한 모양의 JSON을 만들어 돌려줌.
 function gvizUrl(sheetName, range) {
-  const params = new URLSearchParams({ tqx: "out:json", sheet: sheetName });
+  const params = new URLSearchParams({ sheet: sheetName });
   if (range) params.set("range", range);
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?${params.toString()}`;
+  return `${PROGRESS_WEBHOOK_URL}?${params.toString()}`;
 }
 
 async function fetchGrid(sheetName, range) {
