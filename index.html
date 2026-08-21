@@ -1106,7 +1106,8 @@ function cmpRow(label, unitTxt, targetVal, cumVal, remainVal, annualVal, vsTarge
   function deltaCell(delta, pct) {
     if (delta === undefined || delta === null) return `<td class="num">–</td>`;
     const cls = deltaClass(delta, invert);
-    return `<td class="num"><span class="delta ${cls}"><span class="arrow">${arrow(delta)}</span> ${numStr(Math.abs(delta))}${suffix}${pct!==undefined?` (${fmt(pct,0)}${pctSuffix})`:''}</span></td>`;
+    const sign = ppMode ? (delta > 0 ? "+" : delta < 0 ? "-" : "–") : arrow(delta);
+    return `<td class="num"><span class="delta ${cls}"><span class="arrow">${sign}</span> ${numStr(Math.abs(delta))}${suffix}${pct!==undefined?` (${fmt(pct,0)}${pctSuffix})`:''}</span></td>`;
   }
   function drillCell(v, monthKey) {
     const cls = `num strong ${typeof v === 'number' && v < 0 ? 'neg' : ''}${drill ? ' cmp-cum-drill' : ''}`;
@@ -1228,7 +1229,7 @@ function renderPanel(u) {
     <div class="panel-title"><h2>핵심 지표</h2><span class="hint">${CLOSING_MONTH}월 누계 · 연간 예상</span></div>
     <div class="kpi-row">${kpiCards}</div>
 
-    <div class="panel-title"><h2>계획 대비 실적 비교</h2><span class="hint">목표 대비 · 누계/잔여 클릭 시 상세 현황 확인 가능</span></div>
+    <div class="panel-title"><h2>계획 대비 실적 비교</h2><span class="hint">계획 대비 · 누계/잔여 클릭 시 상세 현황 확인 가능</span></div>
     <div class="table-card">
       <div class="table-scroll">
         <table class="cmp">
@@ -1239,7 +1240,7 @@ function renderPanel(u) {
               <th class="grp">누계 (1~${CLOSING_MONTH}월)</th>
               <th class="grp">잔여 (${CLOSING_MONTH+1}~12월)</th>
               <th class="grp">연간 (추정)</th>
-              <th class="grp">목표대비</th>
+              <th class="grp">계획대비</th>
             </tr>
           </thead>
           <tbody>${cmpRows.join("")}</tbody>
