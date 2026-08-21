@@ -572,7 +572,7 @@ function sumFunnelTarget(pipeGrid, dataStart, bizFilter) {
     const biz = stripSpaces(r[0]) ? String(r[0]).trim() : "";
     if (!biz) continue;
     if (!bizMatch(biz, bizFilter)) continue;
-    if (stripSpaces(r[2]) !== "적용") continue; // C = 수주확도 적용
+    if (toNum(r[18]) < 0.5) continue; // S = 예상수주확률, 50% 미만 제외(C열 "적용" 기준과 동일 — 2026-08-21 확인)
     s += toNum(r[34]); // AI = 매출 당해합계
   }
   return s;
@@ -805,9 +805,8 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
       if (!bizMatch(biz, bizFilter)) return;
       const monthsArr = rest.slice(0, 12);
       const revThisYear = rest[12];
-      const appliedFlag = rest[13];
       const matRatio = rest[14];
-      if (appliedFlag !== "적용") return; // C열 수주확도 적용 필터
+      if ((parseInt(prob, 10) || 0) < 50) return; // S열 예상수주확률 50% 미만 제외(C열 "적용" 기준과 동일 — 2026-08-21 확인)
       const amt = subMonth ? monthsArr[subMonth - 1] : revThisYear;
       if (!amt) return;
       rows.push({ name, cust, rep, amt, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline", matRatio });
