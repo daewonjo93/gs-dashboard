@@ -521,7 +521,7 @@ function findPipeDataStart(grid) {
   throw new Error("사전(펀넬)_리스트 구조를 인식할 수 없습니다 (합계 행을 찾지 못함)");
 }
 
-// A=사업부명, B=계약월, G=프로젝트명, J=영업대표, K=매출처명, O=계약금액, R:AC=1~12월 매출인식
+// A=사업부명, B=계약월, E=당해재료비율, G=프로젝트명, J=영업대표, K=매출처명, O=계약금액, R:AC=1~12월 매출인식
 function buildWonList(grid, dataStart) {
   const rows = [];
   for (let i = dataStart; i < grid.length; i++) {
@@ -530,13 +530,13 @@ function buildWonList(grid, dataStart) {
     if (!biz) continue;
     const months = [];
     for (let c = 17; c <= 28; c++) months.push(toNum(r[c]));
-    rows.push([biz, r[6], r[10], r[9], String(r[1] || "").trim(), toNum(r[14]), ...months]);
+    rows.push([biz, r[6], r[10], r[9], String(r[1] || "").trim(), toNum(r[14]), ...months, toNum(r[4])]); // 마지막 = E열 당해재료비율(0~1)
   }
   return rows;
 }
-// A=사업부명, B=계약월, C=수주확도 적용, H=프로젝트명, K=영업대표, L=매출처명, R=예상수주확률, S=프로젝트상태, V:AG=1~12월
+// A=사업부명, B=계약월, C=수주확도 적용, G=재료비율, H=프로젝트명, K=영업대표, L=매출처명, R=예상수주확률, S=프로젝트상태, V:AG=1~12월
 // 2026-08-14: 새 시트에서 "수주확도 적용" 상태 열이 추가되며 C열 이후 전체가 +1 밀림 —
-// A=사업부명, B=계약월, D=수주확도 적용(금액), I=프로젝트명, L=영업대표, M=매출처명, S=예상수주확률, T=프로젝트상태, W:AH=1~12월 매출인식
+// A=사업부명, B=계약월, D=수주확도 적용(금액), G=재료비율, I=프로젝트명, L=영업대표, M=매출처명, S=예상수주확률, T=프로젝트상태, W:AH=1~12월 매출인식
 function buildPipelineList(grid, dataStart) {
   const rows = [];
   for (let i = dataStart; i < grid.length; i++) {
@@ -547,7 +547,7 @@ function buildPipelineList(grid, dataStart) {
     for (let c = 22; c <= 33; c++) months.push(toNum(r[c]));
     const prob = r[18] != null ? Math.round(toNum(r[18]) * 100) + "%" : "";
     const applied = stripSpaces(r[2]); // C열 = 수주확도 적용 여부("적용"/"-")
-    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), toNum(r[3]), prob, (r[19] || "").toString().trim(), ...months, toNum(r[34]), applied]); // 마지막 2개 = AI열 매출 당해합계, C열 적용여부
+    rows.push([biz, r[8], r[12], r[11], String(r[1] || "").trim(), toNum(r[3]), prob, (r[19] || "").toString().trim(), ...months, toNum(r[34]), applied, toNum(r[6])]); // 마지막 3개 = AI열 매출 당해합계, C열 적용여부, G열 재료비율(0~1)
   }
   return rows;
 }
@@ -785,27 +785,32 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
     const nums = subMonth ? [subMonth] : snapshotMonthRange(metric);
     const rows = [];
     PROJECTS_WON.forEach(p => {
-      const [biz, name, cust, rep, month, amt, ...m] = p;
+      const [biz, name, cust, rep, month, amt, ...rest] = p;
+      const matRatio = rest.pop(); // 마지막 원소 = 당해재료비율(0~1), 나머지가 12개월 매출인식
+      const m = rest;
       if (!bizMatch(biz, bizFilter)) return;
       const sum = nums.reduce((s, n) => s + m[n - 1], 0);
-      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, tag: "확정계약", cls: "won" });
+      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, tag: "확정계약", cls: "won", matRatio });
     });
     rows.sort((a, b) => b.amt - a.amt);
     return { rows, total: rows.reduce((s, r) => s + r.amt, 0) };
   }
 
   if (metric === "펀넬매출") {
-    // 월별(W:AH) 매출인식 스케줄이 일부 프로젝트에서 비어있어 AI열(당해합계)과 합이 안 맞음 —
-    // 월별 필터 없이 항상 AI열 당해합계 기준으로만 표시 (2026-08-18 확인).
+    // "전체"는 AI열 당해합계 기준(월별 매출인식 스케줄이 일부 프로젝트에서 비어있어 12개월 합과 안 맞을 수 있음, 2026-08-18 확인).
+    // 특정 월을 고르면 그 달의 매출인식 예정 금액(월별 스케줄 값)을 그대로 사용.
     const rows = [];
     PROJECTS_PIPELINE.forEach(p => {
       const [biz, name, cust, rep, month, applied, prob, status, ...rest] = p;
       if (!bizMatch(biz, bizFilter)) return;
+      const monthsArr = rest.slice(0, 12);
       const revThisYear = rest[12];
       const appliedFlag = rest[13];
+      const matRatio = rest[14];
       if (appliedFlag !== "적용") return; // C열 수주확도 적용 필터
-      if (!revThisYear) return;
-      rows.push({ name, cust, rep, amt: revThisYear, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
+      const amt = subMonth ? monthsArr[subMonth - 1] : revThisYear;
+      if (!amt) return;
+      rows.push({ name, cust, rep, amt, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline", matRatio });
     });
     rows.sort((a, b) => b.amt - a.amt);
     return { rows, total: rows.reduce((s, r) => s + r.amt, 0) };
@@ -817,14 +822,16 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
   const rows = [];
 
   PROJECTS_WON.forEach(p => {
-    const [biz, name, cust, rep, month, amt, ...m] = p;
+    const [biz, name, cust, rep, month, amt, ...rest] = p;
+    const matRatio = rest.pop(); // 마지막 원소 = 당해재료비율(0~1), 나머지가 12개월 매출인식
+    const m = rest;
     if (!bizMatch(biz, bizFilter)) return;
     const rev = m.reduce((s, v) => s + v, 0); // 당해 매출금액 = 해당 프로젝트의 1~12월 매출인식 합계
     if (metric === "수주") {
-      if (yms.includes(month)) rows.push({ name, cust, rep, amt, rev, month, tag: "확정계약", cls: "won" });
+      if (yms.includes(month)) rows.push({ name, cust, rep, amt, rev, month, tag: "확정계약", cls: "won", matRatio });
     } else {
       const sum = nums.reduce((s, n) => s + m[n - 1], 0);
-      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, rev, tag: "확정계약", cls: "won" });
+      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, rev, tag: "확정계약", cls: "won", matRatio });
     }
   });
 
@@ -832,13 +839,14 @@ function computeRows(unitKey, metric, monthKey, subMonth) {
     const [biz, name, cust, rep, month, applied, prob, status, ...rest] = p;
     const m = rest.slice(0, 12);
     const rev = rest[12]; // 당해 매출금액 = AI열 매출 당해합계
+    const matRatio = rest[14];
     if (!bizMatch(biz, bizFilter)) return;
     if ((parseInt(prob, 10) || 0) < 50) return; // 수주확도(확률) 50% 미만 제외
     if (metric === "수주") {
-      if (yms.includes(month)) rows.push({ name, cust, rep, amt: applied, rev, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
+      if (yms.includes(month)) rows.push({ name, cust, rep, amt: applied, rev, month, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline", matRatio });
     } else {
       const sum = nums.reduce((s, n) => s + m[n - 1], 0);
-      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, rev, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline" });
+      if (sum !== 0) rows.push({ name, cust, rep, amt: sum, rev, tag: `${status} · 수주확률 ${prob}`, cls: "pipeline", matRatio });
     }
   });
 
@@ -872,16 +880,16 @@ function renderProjectModal(subMonth) {
   if (isSnapshot) {
     document.getElementById("projModalTitle").textContent = `${unitLabel} · ${subMonth ? subMonth + "월 " : ""}${metric} 프로젝트`;
     document.getElementById("projModalSub").textContent =
-      metric === "수주잔고" ? `${CLOSING_MONTH}월 마감 기준, 잔여 월 매출인식 합계` : "수주확도 적용 프로젝트의 당해 매출 합계 기준";
+      metric === "수주잔고" ? `${CLOSING_MONTH}월 마감 기준, 잔여 월 매출인식 합계`
+      : subMonth ? "해당 월 매출인식 예정 금액 기준"
+      : "수주확도 적용 프로젝트의 당해 매출 합계 기준";
 
-    // 펀넬매출: 월별 매출인식 스케줄이 일부 프로젝트에서 비어있어 필터 제공 안 함(항상 당해합계 기준).
-    if (metric === "수주잔고") {
-      const snapNums = snapshotMonthRange(metric);
-      const btns = [{ label: "전체", val: "" }, ...snapNums.map(n => ({ label: `${n}월`, val: n }))];
-      filterHtml = `<div class="month-filter">${btns.map(b =>
-        `<button type="button" class="month-filter-btn ${(!subMonth && b.val==="") || subMonth===b.val ? 'active':''}" onclick="selectModalMonth(${b.val || 'null'})">${b.label}</button>`
-      ).join("")}</div>`;
-    }
+    // 데이터가 없는 달은 버튼 자체를 숨김(눌러봤자 빈 목록만 나오는 걸 방지).
+    const snapNums = snapshotMonthRange(metric).filter(n => computeRows(modalCtx.unitKey, metric, monthKey, n).rows.length > 0);
+    const btns = [{ label: "전체", val: "" }, ...snapNums.map(n => ({ label: `${n}월`, val: n }))];
+    filterHtml = `<div class="month-filter">${btns.map(b =>
+      `<button type="button" class="month-filter-btn ${(!subMonth && b.val==="") || subMonth===b.val ? 'active':''}" onclick="selectModalMonth(${b.val || 'null'})">${b.label}</button>`
+    ).join("")}</div>`;
   } else {
     const mt = monthTargets(monthKey);
     const monthLabel = MONTH_LABEL[monthKey] || `${mt.nums[0]}월`;
@@ -903,7 +911,7 @@ function renderProjectModal(subMonth) {
   const tableHtml = rows.length === 0
     ? `<div class="modal-empty">해당하는 프로젝트가 없습니다.</div>`
     : `<table class="proj">
-        <thead><tr><th>프로젝트</th><th class="num">금액</th>${showRev ? '<th class="num">당해 매출</th>' : ''}</tr></thead>
+        <thead><tr><th>프로젝트</th><th class="num">금액</th>${showRev ? '<th class="num">당해 매출</th>' : ''}<th class="num">재료비율</th></tr></thead>
         <tbody>
           ${rows.map(r => `
             <tr>
@@ -914,6 +922,7 @@ function renderProjectModal(subMonth) {
               </td>
               <td class="num pamt">${fmt(r.amt / 1e8, 1)}억</td>
               ${showRev ? `<td class="num pamt">${fmt(r.rev / 1e8, 1)}억</td>` : ''}
+              <td class="num pamt">${r.matRatio != null ? Math.round(r.matRatio * 100) + '%' : '–'}</td>
             </tr>`).join("")}
         </tbody>
       </table>`;
