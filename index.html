@@ -178,7 +178,7 @@
   .stat-row .l { color: var(--ink-500); font-size: 13.5px; font-weight: 600; }
   .stat-row .v { font-family: var(--font-num); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; white-space: nowrap; }
   .kpi-foot { display: flex; gap: 14px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 13px; }
-  .kpi-foot .item { display: flex; flex-direction: column; gap: 3px; }
+  .kpi-foot .item { display: flex; flex-direction: column; gap: 3px; flex: 1 1 0; min-width: 0; }
   .kpi-foot .item .l { color: var(--ink-500); }
   .kpi-foot .item .v { font-family: var(--font-num); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .v.up { color: var(--good); } .v.down { color: var(--bad); } .v.flat { color: var(--ink-700); }
@@ -186,7 +186,9 @@
   /* ---------- Comparison table ---------- */
   .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
   .table-scroll { overflow-x: auto; }
-  table.cmp { width: 100%; border-collapse: collapse; min-width: 640px; }
+  table.cmp { width: 100%; border-collapse: collapse; min-width: 640px; table-layout: fixed; }
+  table.cmp th:first-child, table.cmp td:first-child { width: 16%; }
+  table.cmp th:not(:first-child), table.cmp td:not(:first-child) { width: 16.8%; }
   table.cmp th, table.cmp td { padding: 10px 14px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
   table.cmp th:first-child, table.cmp td:first-child { text-align: left; }
   table.cmp thead th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-500); font-weight: 700; background: var(--surface-2); }
@@ -253,7 +255,7 @@
   .month-filter-btn:hover { border-color: var(--border-strong); color: var(--ink-900); }
   .month-filter-btn.active { background: var(--accent-2); border-color: var(--accent-2); color: #FFFFFF; }
   table.proj { width: 100%; border-collapse: collapse; }
-  table.proj th { background: var(--surface); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-500); font-weight: 700; text-align: left; padding: 12px 20px 6px; border-bottom: 1px solid var(--border); }
+  table.proj th { background: var(--surface); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-500); font-weight: 700; text-align: left; padding: 12px 20px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   table.proj th.num, table.proj td.num { text-align: right; }
   table.proj th.status, table.proj td.status { text-align: right; white-space: nowrap; }
   table.proj.exec-table { table-layout: fixed; }
