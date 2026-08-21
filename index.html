@@ -208,6 +208,7 @@
   .month-card .m-name { font-size: 13px; font-weight: 800; color: var(--ink-900); }
   .month-card .m-kind { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
   .month-card .m-kind.actual { background: var(--accent-2-soft); color: var(--accent-2); }
+  .month-card .m-kind.forecast { background: var(--warn-soft); color: var(--warn); }
   .month-card .m-kind.plan { background: var(--surface-3); color: var(--ink-500); }
   .m-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); margin: 0 -8px; padding-left: 8px; padding-right: 8px; border-radius: 6px; }
   .m-row:first-of-type { border-top: none; }
@@ -1193,8 +1194,9 @@ function renderPanel(u) {
   }
 
   const monthCards = Array.from({ length: 12 }, (_, idx) => idx + 1).map(m => {
-    const kind = m <= CLOSING_MONTH ? "actual" : "plan";
-    const label = m <= CLOSING_MONTH ? "실적" : "계획";
+    // 1~마감월(CLOSING_MONTH)은 실적(마감 완료), 마감월 다음달(=현재 진행중인 달)은 예상, 그 이후는 계획.
+    const kind = m <= CLOSING_MONTH ? "actual" : m === CLOSING_MONTH + 1 ? "forecast" : "plan";
+    const label = m <= CLOSING_MONTH ? "실적" : m === CLOSING_MONTH + 1 ? "예상" : "계획";
     const lines = [];
     metricNames.forEach(name => {
       const v = u.monthly[name][m - 1];
@@ -1245,7 +1247,7 @@ function renderPanel(u) {
       </div>
     </div>
 
-    <div class="panel-title"><h2>월별 전망</h2><span class="hint">1~${CLOSING_MONTH}월 실적 · ${CLOSING_MONTH+1}~12월 계획 · 옆으로 스크롤해서 전체 12개월 확인 (수주/매출 클릭 시 상세 현황 확인 가능)</span></div>
+    <div class="panel-title"><h2>월별 전망</h2><span class="hint">1~${CLOSING_MONTH}월 실적 · ${CLOSING_MONTH+1}월 예상 · ${CLOSING_MONTH+2}~12월 계획 · 옆으로 스크롤해서 전체 12개월 확인 (수주/매출 클릭 시 상세 현황 확인 가능)</span></div>
     <div class="month-grid">${monthCards}</div>
 
     ${statusStrip}
