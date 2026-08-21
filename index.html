@@ -278,11 +278,16 @@
     border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; resize: vertical; min-height: 44px;
   }
   .progress-week textarea:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: var(--accent-2); }
-  .progress-week input[type="text"], .progress-week input[type="number"] {
+  .progress-week input[type="text"], .progress-week input[type="number"], .progress-week input[type="month"], .progress-week select {
     font-family: var(--font-sans); font-size: 13px; color: var(--ink-900); background: var(--surface-2);
     border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
   }
-  .progress-week input:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: var(--accent-2); }
+  .progress-week select { appearance: auto; cursor: pointer; }
+  .progress-week input:focus, .progress-week select:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; border-color: var(--accent-2); }
+  .req { color: var(--bad); margin-left: 2px; }
+  .timing-range { display: flex; align-items: center; gap: 6px; }
+  .timing-range input[type="month"] { flex: 1; min-width: 0; }
+  .timing-range span { color: var(--ink-500); font-size: 12px; flex-shrink: 0; }
 
   /* ---------- 주간업무보고 ---------- */
   .week-form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
@@ -1441,6 +1446,55 @@ function getWeekInfo(now) {
 }
 function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
 
+// 수행 기간: 입력은 시작월/종료월을 따로 받지만(<input type="month">), 시트엔 "26년 M월 ~ 27년 M월" 한 칸으로 합쳐서 저장.
+// 대시보드 전체가 연도를 2자리로 표기하는 관례(예: "26년 8월 3주차")를 그대로 따름.
+function ymToLabel(ym) {
+  if (!ym) return "";
+  const [y, m] = ym.split("-");
+  return `${y.slice(2)}년 ${Number(m)}월`;
+}
+function formatTimingRange(startYM, endYM) {
+  const s = ymToLabel(startYM), e = ymToLabel(endYM);
+  if (s && e) return `${s} ~ ${e}`;
+  return s || e || "";
+}
+// 수정 폼을 열 때 기존 "26년 M월 ~ 27년 M월"(또는 단일 "26년 M월") 텍스트를 <input type="month"> 값으로 역파싱. 2자리/4자리 연도 모두 인식.
+// 이 패턴과 안 맞는 옛날 자유 텍스트("미정" 등)는 빈칸으로 남음(저장 시 값을 다시 채워야 함 — 프로젝트 유형 select와 동일한 방식).
+function parseTimingRange(text) {
+  if (!text) return { start: "", end: "" };
+  const toYM = (y, m) => `${y.length === 2 ? "20" + y : y}-${m.padStart(2, "0")}`;
+  const range = text.match(/^(\d{2,4})년\s*(\d{1,2})월\s*~\s*(\d{2,4})년\s*(\d{1,2})월$/);
+  if (range) return { start: toYM(range[1], range[2]), end: toYM(range[3], range[4]) };
+  const single = text.match(/^(\d{2,4})년\s*(\d{1,2})월$/);
+  if (single) return { start: toYM(single[1], single[2]), end: "" };
+  return { start: "", end: "" };
+}
+
+// 새 보고 작성/수정 폼 공통 필수값 검증. prefix는 "wf"(새 보고) 또는 "we"(수정).
+// 프로젝트/고객사·담당자/프로젝트 유형/사업 규모/수행 기간/수주 확도 모두 필수.
+function collectWeeklyFormFields(prefix) {
+  const project = document.getElementById(`${prefix}_project`).value.trim();
+  const contact = document.getElementById(`${prefix}_contact`).value.trim();
+  const type = document.getElementById(`${prefix}_type`).value.trim();
+  const scale = document.getElementById(`${prefix}_scale`).value.trim();
+  const timingStart = document.getElementById(`${prefix}_timing_start`).value;
+  const timingEnd = document.getElementById(`${prefix}_timing_end`).value;
+  const probRaw = document.getElementById(`${prefix}_prob`).value;
+  if (!project) return { error: "프로젝트명을 입력해주세요" };
+  if (!contact) return { error: "고객사 / 담당자를 입력해주세요" };
+  if (!type) return { error: "프로젝트 유형을 선택해주세요" };
+  if (!scale) return { error: "사업 규모(금액)를 입력해주세요" };
+  if (!timingStart || !timingEnd) return { error: "수행 기간(시작월~종료월)을 입력해주세요" };
+  if (probRaw === "") return { error: "수주 확도를 입력해주세요" };
+  return {
+    values: {
+      project, contact, type, scale,
+      timing: formatTimingRange(timingStart, timingEnd),
+      prob: Number(probRaw) || 0,
+    },
+  };
+}
+
 // 시트가 존재하는지(A1 라벨이 "연도"인지)까지 확인 — 없는 시트명을 gviz에 물으면 조용히 GS 시트를 반환하므로 반드시 검증 필요.
 async function fetchWeeklySheetRows(sheetName) {
   if (WEEKLY_CACHE[sheetName]) return WEEKLY_CACHE[sheetName];
@@ -1485,7 +1539,7 @@ function weeklyReportCard(r, opts = {}) {
   <div class="week-card">
     <div class="week-card-head">
       <div class="week-pname">${badge}${r.project || "(프로젝트명 없음)"}</div>
-      <span class="week-range">${fmtMD(r.start)} ~ ${fmtMD(r.end)}</span>
+      <span class="week-range">${r.timing || "–"}</span>
     </div>
     <div class="week-meta">${r.contact}${r.type ? ` · ${r.type}` : ''}${r.scale ? ` · ${r.scale}` : ''}${r.prob ? ` · 수주확도 ${r.prob}%` : ''}</div>
     ${r.status ? `<div class="week-field"><b>진행 현황</b><p>${r.status.replace(/\n/g, '<br>')}</p></div>` : ''}
@@ -1495,17 +1549,26 @@ function weeklyReportCard(r, opts = {}) {
   </div>`;
 }
 
+// 프로젝트 유형은 구축/유지보수 둘 중 하나로만 입력되게 — 자유 텍스트 대신 select
+const PROJECT_TYPE_OPTIONS = ["구축", "유지보수"];
+function projectTypeOptionsHtml(current) {
+  // "선택"은 처음 값으로만 보이고 목록엔 안 뜨게(hidden) — 실제 선택지는 구축/유지보수 두 개뿐.
+  const placeholder = `<option value="" disabled hidden ${!current ? "selected" : ""}>선택</option>`;
+  const opts = PROJECT_TYPE_OPTIONS.map(t => `<option value="${t}" ${current === t ? "selected" : ""}>${t}</option>`);
+  return placeholder + opts.join("");
+}
+
 // 카드 목록 안에서 수정 버튼을 누른 항목만 이 폼으로 교체되어 바로 그 자리에서 편집.
 function weeklyEditCard(r) {
   return `
   <div class="week-card week-form-card">
     <div class="week-form-grid">
-      <div class="progress-week"><label>프로젝트</label><input type="text" id="we_project" value="${escAttr(r.project)}"></div>
-      <div class="progress-week"><label>고객사 / 담당자</label><input type="text" id="we_contact" value="${escAttr(r.contact)}"></div>
-      <div class="progress-week"><label>프로젝트 유형</label><input type="text" id="we_type" value="${escAttr(r.type)}"></div>
-      <div class="progress-week"><label>사업 규모(금액)</label><input type="text" id="we_scale" value="${escAttr(r.scale)}"></div>
-      <div class="progress-week"><label>시행 시기</label><input type="text" id="we_timing" value="${escAttr(r.timing)}"></div>
-      <div class="progress-week"><label>수주 확도(%)</label><input type="number" id="we_prob" min="0" max="100" step="5" value="${escAttr(r.prob || 0)}"></div>
+      <div class="progress-week"><label>프로젝트<span class="req">*</span></label><input type="text" id="we_project" value="${escAttr(r.project)}"></div>
+      <div class="progress-week"><label>고객사 / 담당자<span class="req">*</span></label><input type="text" id="we_contact" value="${escAttr(r.contact)}"></div>
+      <div class="progress-week"><label>프로젝트 유형<span class="req">*</span></label><select id="we_type">${projectTypeOptionsHtml(r.type)}</select></div>
+      <div class="progress-week"><label>사업 규모(금액)<span class="req">*</span></label><input type="text" id="we_scale" value="${escAttr(r.scale)}"></div>
+      <div class="progress-week"><label>수행 기간<span class="req">*</span></label><div class="timing-range"><input type="month" id="we_timing_start" value="${escAttr(parseTimingRange(r.timing).start)}"><span>~</span><input type="month" id="we_timing_end" value="${escAttr(parseTimingRange(r.timing).end)}"></div></div>
+      <div class="progress-week"><label>수주 확도(%)<span class="req">*</span></label><input type="number" id="we_prob" min="0" max="100" step="5" value="${escAttr(r.prob || 0)}"></div>
     </div>
     <div class="progress-week"><label>주요 일정 및 진행 현황</label><textarea id="we_status" rows="3">${escAttr(r.status)}</textarea></div>
     <div class="progress-week"><label>이슈 및 리스크</label><textarea id="we_issue" rows="2">${escAttr(r.issue)}</textarea></div>
@@ -1524,6 +1587,13 @@ let weeklyCurrentWeekKey = null; // 현재 선택된 주차 필터
 let weeklyListOpts = {}; // { showBadge, editable } — 전사/전략사업부 합산뷰는 읽기 전용, 개별 사업부 탭만 수정/삭제 가능
 let weeklyEditingId = null; // 현재 인라인 수정 폼으로 펼쳐진 항목의 id
 function weekKeyOf(r) { return `${r.year}-${r.month}-${r.week}`; }
+
+// "N건 · 8/17 ~ 8/21" — 건수와 그 주차의 날짜 범위를 함께 표시. 날짜는 카드 낱개가 아니라 헤더에 한 번만.
+function weeklyCountLabel(list, key) {
+  const filtered = key ? list.filter(r => weekKeyOf(r) === key) : list;
+  const range = filtered.length > 0 ? `${fmtMD(filtered[0].start)} ~ ${fmtMD(filtered[0].end)}` : "";
+  return `${filtered.length}건${range ? ` · ${range}` : ""}`;
+}
 
 function renderWeeklyListSection(list, selectedKey, opts = {}) {
   weeklyCurrentWeekKey = selectedKey;
@@ -1547,6 +1617,11 @@ function renderWeeklyListSection(list, selectedKey, opts = {}) {
   const listHtml = filtered.length === 0
     ? `<div class="modal-empty">등록된 보고가 없습니다.</div>`
     : `<div class="week-list">${filtered.map(r => (opts.editable && r.id && r.id === weeklyEditingId) ? weeklyEditCard(r) : weeklyReportCard(r, opts)).join("")}</div>`;
+
+  // 건수+날짜 표시는 전체가 아니라 지금 선택된 주차 기준으로 — 주차 필터를 바꿀 때마다 같이 갱신.
+  const countEl = document.getElementById("weeklyCountHint");
+  if (countEl) countEl.textContent = weeklyCountLabel(list, selectedKey);
+
   return filterHtml + listHtml;
 }
 
@@ -1588,7 +1663,7 @@ async function renderWeeklyPanel(u) {
     weeklyListOpts = { showBadge: true, editable: false }; // 전사/전략사업부 합산뷰는 여러 시트가 섞여있어 읽기 전용
     const defaultKey = allRows.length > 0 ? weekKeyOf(allRows[0]) : null;
     panelEl.innerHTML = `
-      <div class="panel-title"><h2>주간업무보고</h2><span class="hint">${allRows.length}건 · 각 사업부 탭에서 새 보고 작성/수정 가능</span></div>
+      <div class="panel-title"><h2>주간업무보고</h2><span class="hint" id="weeklyCountHint">${weeklyCountLabel(allRows, defaultKey)}</span></div>
       <div id="weeklyListContainer">${renderWeeklyListSection(allRows, defaultKey, weeklyListOpts)}</div>
     `;
     return;
@@ -1615,7 +1690,7 @@ async function renderWeeklyPanel(u) {
 
   panelEl.innerHTML = `
     <div class="panel-title">
-      <h2>주간업무보고</h2><span class="hint">${list.length}건</span>
+      <h2>주간업무보고</h2><span class="hint" id="weeklyCountHint">${weeklyCountLabel(list, defaultKey)}</span>
       <button type="button" class="btn-save panel-title-action" id="weeklyToggleBtn" onclick="toggleWeeklyForm('${u.key}')">+ 새 보고 작성</button>
     </div>
     <div id="weeklyFormInline"></div>
@@ -1637,12 +1712,12 @@ function toggleWeeklyForm(unitKey) {
     <div class="week-form-card">
       <div class="progress-week"><label style="font-size:12.5px;">${wk.year}년 ${wk.month}월 ${wk.week}주차 (${fmtMD(wk.monday)}~${fmtMD(wk.friday)}) 기준으로 저장됩니다</label></div>
       <div class="week-form-grid">
-        <div class="progress-week"><label>프로젝트</label><input type="text" id="wf_project"></div>
-        <div class="progress-week"><label>고객사 / 담당자</label><input type="text" id="wf_contact"></div>
-        <div class="progress-week"><label>프로젝트 유형</label><input type="text" id="wf_type"></div>
-        <div class="progress-week"><label>사업 규모(금액)</label><input type="text" id="wf_scale"></div>
-        <div class="progress-week"><label>시행 시기</label><input type="text" id="wf_timing"></div>
-        <div class="progress-week"><label>수주 확도(%)</label><input type="number" id="wf_prob" min="0" max="100" step="5"></div>
+        <div class="progress-week"><label>프로젝트<span class="req">*</span></label><input type="text" id="wf_project"></div>
+        <div class="progress-week"><label>고객사 / 담당자<span class="req">*</span></label><input type="text" id="wf_contact"></div>
+        <div class="progress-week"><label>프로젝트 유형<span class="req">*</span></label><select id="wf_type">${projectTypeOptionsHtml("")}</select></div>
+        <div class="progress-week"><label>사업 규모(금액)<span class="req">*</span></label><input type="text" id="wf_scale"></div>
+        <div class="progress-week"><label>수행 기간<span class="req">*</span></label><div class="timing-range"><input type="month" id="wf_timing_start"><span>~</span><input type="month" id="wf_timing_end"></div></div>
+        <div class="progress-week"><label>수주 확도(%)<span class="req">*</span></label><input type="number" id="wf_prob" min="0" max="100" step="5"></div>
       </div>
       <div class="progress-week"><label>주요 일정 및 진행 현황</label><textarea id="wf_status" rows="3"></textarea></div>
       <div class="progress-week"><label>이슈 및 리스크</label><textarea id="wf_issue" rows="2"></textarea></div>
@@ -1661,9 +1736,9 @@ async function submitWeeklyReport(unitKey) {
   const sheetName = WEEKLY_REPORT_SHEETS[unitKey];
   const statusEl = document.getElementById("weeklyFormStatus");
   const btn = document.getElementById("weeklySubmitBtn");
-  const project = document.getElementById("wf_project").value.trim();
-  if (!project) {
-    statusEl.textContent = "프로젝트명을 입력해주세요";
+  const fields = collectWeeklyFormFields("wf");
+  if (fields.error) {
+    statusEl.textContent = fields.error;
     statusEl.className = "progress-status err";
     return;
   }
@@ -1671,12 +1746,7 @@ async function submitWeeklyReport(unitKey) {
   const report = {
     year: wk.year, month: wk.month, week: wk.week,
     startDate: isoDate(wk.monday), endDate: isoDate(wk.friday),
-    project,
-    contact: document.getElementById("wf_contact").value.trim(),
-    type: document.getElementById("wf_type").value.trim(),
-    scale: document.getElementById("wf_scale").value.trim(),
-    timing: document.getElementById("wf_timing").value.trim(),
-    prob: Number(document.getElementById("wf_prob").value) || 0,
+    ...fields.values,
     status: document.getElementById("wf_status").value.trim(),
     issue: document.getElementById("wf_issue").value.trim(),
     solution: document.getElementById("wf_solution").value.trim(),
@@ -1711,22 +1781,17 @@ async function saveEditedWeeklyReport(id) {
   const sheetName = WEEKLY_REPORT_SHEETS[r.unit];
   const statusEl = document.getElementById("weeklyEditStatus");
   const btn = document.getElementById("weeklyEditSaveBtn");
-  const project = document.getElementById("we_project").value.trim();
-  if (!project) {
-    statusEl.textContent = "프로젝트명을 입력해주세요";
+  const fields = collectWeeklyFormFields("we");
+  if (fields.error) {
+    statusEl.textContent = fields.error;
     statusEl.className = "progress-status err";
     return;
   }
-  // 주차/기간은 편집 대상이 아님 — 처음 등록됐을 때의 주차를 그대로 유지
+  // 주차/기간(등록 주차)은 편집 대상이 아님 — 처음 등록됐을 때의 주차를 그대로 유지
   const report = {
     year: r.year, month: r.month, week: r.week,
     startDate: isoDate(r.start), endDate: isoDate(r.end),
-    project,
-    contact: document.getElementById("we_contact").value.trim(),
-    type: document.getElementById("we_type").value.trim(),
-    scale: document.getElementById("we_scale").value.trim(),
-    timing: document.getElementById("we_timing").value.trim(),
-    prob: Number(document.getElementById("we_prob").value) || 0,
+    ...fields.values,
     status: document.getElementById("we_status").value.trim(),
     issue: document.getElementById("we_issue").value.trim(),
     solution: document.getElementById("we_solution").value.trim(),
